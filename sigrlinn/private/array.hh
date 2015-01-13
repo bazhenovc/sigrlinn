@@ -20,41 +20,41 @@ class ImmutableArray
 {
 protected:
 
-	size_t capacity  = 0;
-	size_t size      = 0;
+    size_t capacity  = 0;
+    size_t size      = 0;
 
-	T* pointer = nullptr;
+    T* pointer = nullptr;
 
-	ImmutableArray() {}
-	ImmutableArray(const ImmutableArray& other) = delete;
-	virtual ~ImmutableArray() {}
+    ImmutableArray() {}
+    ImmutableArray(const ImmutableArray& other) = delete;
+    virtual ~ImmutableArray() {}
 
 public:
 
-	inline T*       GetData()       { return pointer; }
-	inline const T* GetData() const { return pointer; }
+    inline T*       GetData()       { return pointer; }
+    inline const T* GetData() const { return pointer; }
 
-	inline       T& operator[](size_t index)       { return pointer[index]; }
-	inline const T& operator[](size_t index) const { return pointer[index]; }
+    inline       T& operator[](size_t index)       { return pointer[index]; }
+    inline const T& operator[](size_t index) const { return pointer[index]; }
 
-	// range for support
-	inline T* begin() const { return pointer; }
-	inline T* end()   const { return pointer + size; }
+    // range for support
+    inline T* begin() const { return pointer; }
+    inline T* end()   const { return pointer + size; }
 
-	// size and capacity
-	inline size_t GetSize() const     { return size; }
-	inline size_t GetCapacity() const { return capacity; }
+    // size and capacity
+    inline size_t GetSize() const     { return size; }
+    inline size_t GetCapacity() const { return capacity; }
 
-	// utils
-	inline bool IsEmpty() const { return size != 0; }
+    // utils
+    inline bool IsEmpty() const { return size != 0; }
 
-	inline ptrdiff_t Find(const T& e)
-	{
-		for (size_t i = 0; i < GetSize(); ++i)
-			if (pointer[i] == e)
-				return i;
-		return -1;
-	}
+    inline ptrdiff_t Find(const T& e)
+    {
+        for (size_t i = 0; i < GetSize(); ++i)
+            if (pointer[i] == e)
+                return i;
+        return -1;
+    }
 };
 
 ///
@@ -80,168 +80,168 @@ class DynamicArray final : public ImmutableArray<T>
 {
 protected:
 
-	using ImmutableArray<T>::capacity;
-	using ImmutableArray<T>::size;
-	using ImmutableArray<T>::pointer;
+    using ImmutableArray<T>::capacity;
+    using ImmutableArray<T>::size;
+    using ImmutableArray<T>::pointer;
 
 private:
 
-	enum
-	{
-		kInplaceStorageSize = I,
-		kGrowAmount         = G
-	};
+    enum
+    {
+        kInplaceStorageSize = I,
+        kGrowAmount         = G
+    };
 
-	uint8_t _inplaceStorage[kInplaceStorageSize * sizeof(T)];
+    uint8_t _inplaceStorage[kInplaceStorageSize * sizeof(T)];
 
-	inline void DeleteContents()
-	{
-		uint8_t* ptr = reinterpret_cast<uint8_t*>(pointer);
-		if (ptr != _inplaceStorage) {
-			delete [] ptr;
-			pointer = reinterpret_cast<T*>(_inplaceStorage);
-		}
-	}
+    inline void DeleteContents()
+    {
+        uint8_t* ptr = reinterpret_cast<uint8_t*>(pointer);
+        if (ptr != _inplaceStorage) {
+            delete [] ptr;
+            pointer = reinterpret_cast<T*>(_inplaceStorage);
+        }
+    }
 
 public:
 
-	using ImmutableArray<T>::GetData;
-	using ImmutableArray<T>::IsEmpty;
-	using ImmutableArray<T>::Find;
+    using ImmutableArray<T>::GetData;
+    using ImmutableArray<T>::IsEmpty;
+    using ImmutableArray<T>::Find;
 
-	inline DynamicArray()
-	{
-		capacity = kInplaceStorageSize;
-		pointer = reinterpret_cast<T*>(_inplaceStorage);
-	}
+    inline DynamicArray()
+    {
+        capacity = kInplaceStorageSize;
+        pointer = reinterpret_cast<T*>(_inplaceStorage);
+    }
 
-	inline DynamicArray(const DynamicArray& other)
-	{
-		Resize(other.GetSize());
-		for (size_t i = 0; i < size; ++i)
-			::new (&pointer[i]) T(other[i]);
-	}
+    inline DynamicArray(const DynamicArray& other)
+    {
+        Resize(other.GetSize());
+        for (size_t i = 0; i < size; ++i)
+            ::new (&pointer[i]) T(other[i]);
+    }
 
-	inline DynamicArray& operator=(const DynamicArray& other)
-	{
-		Resize(other.GetSize());
-		for (size_t i = 0; i < size; ++i)
-			::new (&pointer[i]) T(other[i]);
-		return *this;
-	}
+    inline DynamicArray& operator=(const DynamicArray& other)
+    {
+        Resize(other.GetSize());
+        for (size_t i = 0; i < size; ++i)
+            ::new (&pointer[i]) T(other[i]);
+        return *this;
+    }
 
-	inline DynamicArray& operator=(const ImmutableArray<T>& other)
-	{
-		Resize(other.GetSize());
-		for (size_t i = 0; i < size; ++i)
-			::new (&pointer[i]) T(other[i]);
-		return *this;
-	}
+    inline DynamicArray& operator=(const ImmutableArray<T>& other)
+    {
+        Resize(other.GetSize());
+        for (size_t i = 0; i < size; ++i)
+            ::new (&pointer[i]) T(other[i]);
+        return *this;
+    }
 
-	inline ~DynamicArray()
-	{
-		Purge();
-	}
+    inline ~DynamicArray()
+    {
+        Purge();
+    }
 
-	inline void Clear()
-	{
-		for (size_t i = 0; i < size; ++i)
-			pointer[i].~T();
-		size = 0;
-	}
+    inline void Clear()
+    {
+        for (size_t i = 0; i < size; ++i)
+            pointer[i].~T();
+        size = 0;
+    }
 
-	inline void Purge()
-	{
-		Clear();
-		DeleteContents();
+    inline void Purge()
+    {
+        Clear();
+        DeleteContents();
 
-		size = 0;
-		capacity = kInplaceStorageSize;
-	}
+        size = 0;
+        capacity = kInplaceStorageSize;
+    }
 
-	inline void Resize(size_t newSize)
-	{
-		if (newSize == size) return; // fool protection
+    inline void Resize(size_t newSize)
+    {
+        if (newSize == size) return; // fool protection
 
-		if (newSize > capacity) {
-			Grow(newSize - size);
-		}
+        if (newSize > capacity) {
+            Grow(newSize - size);
+        }
 
-		if (newSize < size) {
-			for (size_t i = newSize; i < size; ++i)
-				pointer[i].~T();
-		} else {
-			for (size_t i = size; i < newSize; ++i)
-				::new (&pointer[i]) T();
-		}
-		size = newSize;
-	}
+        if (newSize < size) {
+            for (size_t i = newSize; i < size; ++i)
+                pointer[i].~T();
+        } else {
+            for (size_t i = size; i < newSize; ++i)
+                ::new (&pointer[i]) T();
+        }
+        size = newSize;
+    }
 
-	inline void Reserve(size_t numElements)
-	{
-		if (numElements > capacity)
-			Grow(numElements - capacity);
-	}
+    inline void Reserve(size_t numElements)
+    {
+        if (numElements > capacity)
+            Grow(numElements - capacity);
+    }
 
-	inline void Grow(size_t numElements)
-	{
-		size_t newCapacity = size + numElements;
-		capacity = newCapacity;
+    inline void Grow(size_t numElements)
+    {
+        size_t newCapacity = size + numElements;
+        capacity = newCapacity;
 
-		if (newCapacity > kInplaceStorageSize) {
-			uint8_t* newPointer = new uint8_t[newCapacity * sizeof(T)];
-			T* ptr = reinterpret_cast<T*>(newPointer);
+        if (newCapacity > kInplaceStorageSize) {
+            uint8_t* newPointer = new uint8_t[newCapacity * sizeof(T)];
+            T* ptr = reinterpret_cast<T*>(newPointer);
 
-			for (size_t i = 0; i < size; ++i)
-				::new (&ptr[i]) T(static_cast<T&&>(pointer[i]));
+            for (size_t i = 0; i < size; ++i)
+                ::new (&ptr[i]) T(static_cast<T&&>(pointer[i]));
 
-			DeleteContents();
+            DeleteContents();
 
-			pointer = ptr;
-		}
-	}
+            pointer = ptr;
+        }
+    }
 
-	inline void Add(const T& element)
-	{
-		if (size >= capacity)
-			Grow(kGrowAmount);
+    inline void Add(const T& element)
+    {
+        if (size >= capacity)
+            Grow(kGrowAmount);
 
-		T* ptr = pointer + size;
-		::new (ptr) T(element);
-		size ++;
-	}
+        T* ptr = pointer + size;
+        ::new (ptr) T(element);
+        size ++;
+    }
 
-	template <typename ...Args>
-	inline void EmplaceAdd(Args&&... args)
-	{
-		if (size >= capacity)
-			Grow(kGrowAmount);
+    template <typename ...Args>
+    inline void EmplaceAdd(Args&&... args)
+    {
+        if (size >= capacity)
+            Grow(kGrowAmount);
 
-		T* ptr = pointer + size;
-		::new (ptr) T(static_cast<Args&&>(args)...);
-		size ++;
-	}
+        T* ptr = pointer + size;
+        ::new (ptr) T(static_cast<Args&&>(args)...);
+        size ++;
+    }
 
-	inline void Remove(size_t index)
-	{
-		if (index < size) {
-			pointer[index].~T();
+    inline void Remove(size_t index)
+    {
+        if (index < size) {
+            pointer[index].~T();
 
-			T* ptr = pointer + index;
-			for (size_t i = index + 1; i < size; ++i) {
-				::new (ptr) T(static_cast<T&&>(pointer[i]));
-				ptr++;
-				ptr->~T();
-			}
-		}
-	}
+            T* ptr = pointer + index;
+            for (size_t i = index + 1; i < size; ++i) {
+                ::new (ptr) T(static_cast<T&&>(pointer[i]));
+                ptr++;
+                ptr->~T();
+            }
+        }
+    }
 
-	inline void Remove(const T& element)
-	{
-		ptrdiff_t index = Find(element);
-		if (index != -1)
-			Remove(index);
-	}
+    inline void Remove(const T& element)
+    {
+        ptrdiff_t index = Find(element);
+        if (index != -1)
+            Remove(index);
+    }
 };
 
 }
