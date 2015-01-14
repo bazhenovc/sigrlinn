@@ -1,3 +1,11 @@
+// vertex
+struct VertexData
+{
+	float4 position;
+	float4 color;
+};
+StructuredBuffer<VertexData> g_VertexBuffer;
+StructuredBuffer<uint>       g_IndexBuffer;
 
 // pipeline state
 struct ConstantData
@@ -8,7 +16,7 @@ struct ConstantData
 
 	float4   strideOffset[(2048 - 192) / 16];
 };
-StructuredBuffer<ConstantData> g_ConstantBuffer : register(b0);
+StructuredBuffer<ConstantData> g_ConstantBuffer;
 
 //SamplerState g_SamplerDefault : register(s0);
 
@@ -24,19 +32,28 @@ struct VS_OUTPUT
 
 struct VS_INPUT
 {
-	float4 position : POSITION;
-	float4 color    : COLOR;
-
-	uint   id       : SV_InstanceID;
+	uint instanceID : SV_InstanceID;
+	uint vertexID   : SV_VertexID;
 };
+
+#define DRAW_INDEXED 0
+#define DRAW 1
 
 VS_OUTPUT vs_main(VS_INPUT input)
 {
+	uint instanceID = input.instanceID;
+	uint vertexID   = input.vertexID;
+	uint drawType   = DRAW_INDEXED;
+	
+	VertexData vdata;
+	[branch] if (drawType == DRAW_INDEXED) vdata = g_VertexBuffer[g_IndexBuffer[vertexID]];
+	else     if (drawType == DRAW)         vdata = g_VertexBuffer[vertexID];
+
 	VS_OUTPUT output = (VS_OUTPUT)0;
-	output.position = mul(input.position,  g_ConstantBuffer[input.id].World);
-	output.position = mul(output.position, g_ConstantBuffer[input.id].View);
-	output.position = mul(output.position, g_ConstantBuffer[input.id].Projection);
-	output.color    = input.color;
+	output.position = mul(vdata.position,  g_ConstantBuffer[instanceID].World);
+	output.position = mul(output.position, g_ConstantBuffer[instanceID].View);
+	output.position = mul(output.position, g_ConstantBuffer[instanceID].Projection);
+	output.color    = vdata.color;
 	return output;
 }
 

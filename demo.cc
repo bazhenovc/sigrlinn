@@ -77,7 +77,7 @@ struct VertexStageData
     sgfx::VertexFormatHandle vf;
 };
 
-VertexStageData LoadVS(const char* path, sgfx::VertexElementDescriptor* formatData, size_t formatSize)
+VertexStageData loadVS(const char* path, sgfx::VertexElementDescriptor* formatData, size_t formatSize)
 {
     void* bytecode      = nullptr;
     size_t bytecodeSize = 0;
@@ -95,7 +95,7 @@ VertexStageData LoadVS(const char* path, sgfx::VertexElementDescriptor* formatDa
     return VertexStageData();
 }
 
-sgfx::PixelShaderHandle LoadPS(const char* path)
+sgfx::PixelShaderHandle loadPS(const char* path)
 {
     void* bytecode      = nullptr;
     size_t bytecodeSize = 0;
@@ -112,7 +112,7 @@ sgfx::PixelShaderHandle LoadPS(const char* path)
 
 struct SimpleVertex
 {
-    XMFLOAT3 Pos;
+    XMFLOAT4 Pos;
     XMFLOAT4 Color;
 };
 
@@ -128,8 +128,8 @@ VertexStageData             vsData;
 sgfx::PixelShaderHandle     psHandle;
 sgfx::SurfaceShaderHandle   ssHandle;
 
-sgfx::BufferHandle          cubeVertexBuffer;
-sgfx::BufferHandle          cubeIndexBuffer;
+sgfx::BufferHandle          cubeVertexBuffers[6];
+sgfx::BufferHandle          cubeIndexBuffers[6];
 
 sgfx::PipelineStateHandle   pipelineState;
 sgfx::DrawQueueHandle       drawQueue;
@@ -137,30 +137,42 @@ sgfx::DrawQueueHandle       drawQueue;
 void LoadSampleData()
 {
     sgfx::VertexElementDescriptor vertexFormat[] = {
-        { "POSITION", 0, sgfx::DataFormat::RGB32F, 0, 0,  sgfx::VertexElementType::PerVertex },
-        { "COLOR",    0, sgfx::DataFormat::RGBA32F, 0, 12, sgfx::VertexElementType::PerVertex },
+        { "INSTANCE_ID", 0, sgfx::DataFormat::R32U, 0, 0,  sgfx::VertexElementType::PerVertex }
     };
     size_t vertexFormatSize = sizeof(vertexFormat) / sizeof(sgfx::VertexElementDescriptor);
 
     SimpleVertex vertices[] =
     {
-        { XMFLOAT3( -1.0f, 1.0f, -1.0f ), XMFLOAT4( 0.0f, 0.0f, 1.0f, 1.0f ) },
-        { XMFLOAT3( 1.0f, 1.0f, -1.0f ), XMFLOAT4( 0.0f, 1.0f, 0.0f, 1.0f ) },
-        { XMFLOAT3( 1.0f, 1.0f, 1.0f ), XMFLOAT4( 0.0f, 1.0f, 1.0f, 1.0f ) },
-        { XMFLOAT3( -1.0f, 1.0f, 1.0f ), XMFLOAT4( 1.0f, 0.0f, 0.0f, 1.0f ) },
-        { XMFLOAT3( -1.0f, -1.0f, -1.0f ), XMFLOAT4( 1.0f, 0.0f, 1.0f, 1.0f ) },
-        { XMFLOAT3( 1.0f, -1.0f, -1.0f ), XMFLOAT4( 1.0f, 1.0f, 0.0f, 1.0f ) },
-        { XMFLOAT3( 1.0f, -1.0f, 1.0f ), XMFLOAT4( 1.0f, 1.0f, 1.0f, 1.0f ) },
-        { XMFLOAT3( -1.0f, -1.0f, 1.0f ), XMFLOAT4( 0.0f, 0.0f, 0.0f, 1.0f ) },
+        { XMFLOAT4( -1.0f, 1.0f, -1.0f, 1.0F ),  XMFLOAT4( 0.0f, 0.0f, 1.0f, 1.0f ) },
+        { XMFLOAT4( 1.0f, 1.0f, -1.0f, 1.0F ),   XMFLOAT4( 0.0f, 0.0f, 1.0f, 1.0f ) },
+        { XMFLOAT4( 1.0f, 1.0f, 1.0f, 1.0F ),    XMFLOAT4( 0.0f, 0.0f, 1.0f, 1.0f ) },
+        { XMFLOAT4( -1.0f, 1.0f, 1.0f, 1.0F ),   XMFLOAT4( 0.0f, 0.0f, 1.0f, 1.0f ) },
+        { XMFLOAT4( -1.0f, -1.0f, -1.0f, 1.0F ), XMFLOAT4( 0.0f, 0.0f, 1.0f, 1.0f ) },
+        { XMFLOAT4( 1.0f, -1.0f, -1.0f, 1.0F ),  XMFLOAT4( 0.0f, 0.0f, 1.0f, 1.0f ) },
+        { XMFLOAT4( 1.0f, -1.0f, 1.0f, 1.0F ),   XMFLOAT4( 0.0f, 0.0f, 1.0f, 1.0f ) },
+        { XMFLOAT4( -1.0f, -1.0f, 1.0f, 1.0F ),  XMFLOAT4( 0.0f, 0.0f, 1.0f, 1.0f ) },
     };
 
     uint32_t indices[] = { 3,1,0, 2,1,3, 0,5,4, 1,5,0, 3,4,7, 0,4,3, 1,6,5, 2,6,1, 2,7,6, 3,7,2, 6,4,5, 7,4,6, };
 
-    cubeVertexBuffer = sgfx::createBuffer(sgfx::BufferType::Vertex, vertices, sizeof(SimpleVertex) * 8);
-    cubeIndexBuffer  = sgfx::createBuffer(sgfx::BufferType::Index, indices, sizeof(uint32_t) * 36);
+    XMFLOAT4 colors[] ={ 
+        XMFLOAT4( 1.0F, 0.0F, 0.0F, 1.0F ),
+        XMFLOAT4( 1.0F, 1.0F, 0.0F, 1.0F ),
+        XMFLOAT4( 1.0F, 1.0F, 1.0F, 1.0F ),
 
-    vsData   = LoadVS("shaders/sample0.hlsl", vertexFormat, vertexFormatSize);
-    psHandle = LoadPS("shaders/sample0.hlsl");
+        XMFLOAT4( 0.0F, 0.0F, 1.0F, 1.0F ),
+        XMFLOAT4( 0.0F, 1.0F, 1.0F, 1.0F ),
+        XMFLOAT4( 1.0F, 0.0F, 1.0F, 1.0F ),
+    };
+
+    for (int i = 0; i < 6; ++i) {
+        for (int j = 0; j < 8; ++j) vertices[j].Color = colors[i];
+        cubeVertexBuffers[i] = sgfx::createBuffer(vertices, sizeof(SimpleVertex) * 8, sizeof(SimpleVertex));
+        cubeIndexBuffers[i]  = sgfx::createBuffer(indices, sizeof(uint32_t) * 36, sizeof(uint32_t));
+    }
+
+    vsData   = loadVS("shaders/sample0.hlsl", vertexFormat, vertexFormatSize);
+    psHandle = loadPS("shaders/sample0.hlsl");
 
     if (vsData.vs != sgfx::VertexShaderHandle::invalidHandle() && psHandle != sgfx::PixelShaderHandle::invalidHandle()) {
         ssHandle = sgfx::linkSurfaceShader(
@@ -222,8 +234,8 @@ void LoadSampleData()
 void ReleaseSampleData()
 {
     OutputDebugString("Cleanup\n");
-    sgfx::releaseBuffer(cubeVertexBuffer);
-    sgfx::releaseBuffer(cubeIndexBuffer);
+    for (int i = 0; i < 6; ++i) sgfx::releaseBuffer(cubeVertexBuffers[i]);
+    for (int i = 0; i < 6; ++i) sgfx::releaseBuffer(cubeIndexBuffers[i]);
     sgfx::releaseVertexFormat(vsData.vf);
     sgfx::releaseVertexShader(vsData.vs);
     sgfx::releasePixelShader(psHandle);
@@ -259,6 +271,7 @@ void RenderSample()
     constants.mProjection = XMMatrixTranspose(g_Projection);
 
     // actually draw some stuff
+    size_t counter = 0;
     for (int i = -64; i < 64; ++i) {
         for (int k = -64; k < 64; ++k) {
             constants.mWorld = XMMatrixTranspose(
@@ -276,9 +289,12 @@ void RenderSample()
 
             sgfx::setPrimitiveTopology(drawQueue, sgfx::PrimitiveTopology::TriangleList);
             sgfx::setConstants(drawQueue, 0, &constants, sizeof(constants));
-            sgfx::setVertexBuffer(drawQueue, cubeVertexBuffer);
-            sgfx::setIndexBuffer(drawQueue, cubeIndexBuffer);
+            sgfx::setVertexBuffer(drawQueue, cubeVertexBuffers[counter]);
+            sgfx::setIndexBuffer(drawQueue, cubeIndexBuffers[counter]);
             sgfx::drawIndexed(drawQueue, 36, 0, 0);
+
+            counter++;
+            if (counter == 6) counter = 0;
         }
     }
     sgfx::submit(drawQueue);

@@ -5,6 +5,7 @@
 #include <d3d11.h>
 #include <d3dcompiler.h>
 #include <memory>
+#include <algorithm>
 
 #include <stdlib.h>
 
@@ -45,7 +46,8 @@ static DXGI_FORMAT MapDataFormat[DataFormat::Count] = {
     DXGI_FORMAT_R8_UNORM,
     DXGI_FORMAT_R16_UNORM,
     DXGI_FORMAT_R16_FLOAT,
-    DXGI_FORMAT_R32_TYPELESS,
+    DXGI_FORMAT_R32_SINT,
+    DXGI_FORMAT_R32_UINT,
     DXGI_FORMAT_R32_FLOAT,
     DXGI_FORMAT_R8G8_TYPELESS,
     DXGI_FORMAT_R16G16_TYPELESS,
@@ -143,24 +145,64 @@ static D3D11_INPUT_CLASSIFICATION MapVertexElementType[VertexElementType::Count]
 };
 static_assert((sizeof(MapVertexElementType) / sizeof(D3D11_INPUT_CLASSIFICATION)) == static_cast<size_t>(VertexElementType::Count), "Mapping is broken!");
 
-ID3D11Device*        g_pd3dDevice = NULL;
+ID3D11Device*        g_pd3dDevice        = NULL;
 ID3D11DeviceContext* g_pImmediateContext = NULL;
-IDXGISwapChain*      g_pSwapChain = NULL;
+IDXGISwapChain*      g_pSwapChain        = NULL;
 
-struct DXSharedConstantBuffer final
+struct DXSharedBuffer final
 {
     ID3D11Buffer*             dataBuffer     = nullptr;
     ID3D11ShaderResourceView* dataView       = nullptr;
     size_t                    dataBufferSize = 0;
 
-    DXSharedConstantBuffer() {}
-    ~DXSharedConstantBuffer()
+    DXSharedBuffer() {}
+    ~DXSharedBuffer()
     {
         if (dataBuffer != nullptr) dataBuffer->Release();
         if (dataView   != nullptr) dataView->Release();
     }
 
-    inline void setSize(size_t newSize, size_t numInstances)
+    inline void setImmutable(void* mem, size_t size, size_t stride)
+    {
+        dataBufferSize = size;
+
+        if (dataBuffer != nullptr) dataBuffer->Release();
+        if (dataView   != nullptr) dataView->Release();
+
+        D3D11_BUFFER_DESC bufferDesc;
+        std::memset(&bufferDesc, 0, sizeof(bufferDesc));
+
+        bufferDesc.BindFlags           = D3D11_BIND_SHADER_RESOURCE;
+        bufferDesc.ByteWidth           = dataBufferSize;
+        bufferDesc.Usage               = D3D11_USAGE_IMMUTABLE;
+        bufferDesc.MiscFlags           = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+        bufferDesc.StructureByteStride = stride;
+        bufferDesc.CPUAccessFlags      = 0;
+
+        D3D11_SUBRESOURCE_DATA bufferData;
+        std::memset(&bufferData, 0, sizeof(bufferData));
+
+        bufferData.pSysMem = mem;
+
+        if (FAILED(g_pd3dDevice->CreateBuffer(&bufferDesc, &bufferData, &dataBuffer))) {
+            // TODO: oh fuck, how to handle this?
+            return;
+        }
+
+        D3D11_SHADER_RESOURCE_VIEW_DESC viewDesc;
+        std::memset(&viewDesc, 0, sizeof(viewDesc));
+
+        viewDesc.Format              = DXGI_FORMAT_UNKNOWN;
+        viewDesc.ViewDimension       = D3D11_SRV_DIMENSION_BUFFER;
+        viewDesc.Buffer.ElementWidth = size / stride;
+
+        if (FAILED(g_pd3dDevice->CreateShaderResourceView(dataBuffer, &viewDesc, &dataView))) {
+            // TODO: shit, no way to handle again
+            return;
+        }
+    }
+
+    inline void setConstant(size_t newSize, size_t stride, size_t numInstances)
     {
         if (newSize > dataBufferSize) {
             dataBufferSize = newSize;
@@ -175,7 +217,7 @@ struct DXSharedConstantBuffer final
             bufferDesc.ByteWidth           = dataBufferSize;
             bufferDesc.Usage               = D3D11_USAGE_DYNAMIC;
             bufferDesc.MiscFlags           = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
-            bufferDesc.StructureByteStride = internal::DrawCall::ConstantBufferSize;
+            bufferDesc.StructureByteStride = stride;
             bufferDesc.CPUAccessFlags      = D3D11_CPU_ACCESS_WRITE;
 
             if (FAILED(g_pd3dDevice->CreateBuffer(&bufferDesc, nullptr, &dataBuffer))) {
@@ -226,7 +268,10 @@ struct PipelineStateImpl final
     UINT                     stencilRef;
 
     // constant buffer
-    DXSharedConstantBuffer   constantBuffer;
+    DXSharedBuffer           constantBuffer;
+
+    // Temporary array for instancing
+    internal::DrawQueue::DrawCallArray tmpDrawCalls;
 };
 
 static UINT dxFormatStride(DataFormat format)
@@ -235,7 +280,8 @@ static UINT dxFormatStride(DataFormat format)
     case DataFormat::R8:      { return 1;  } break;
     case DataFormat::R16:     { return 2;  } break;
     case DataFormat::R16F:    { return 2;  } break;
-    case DataFormat::R32:     { return 4;  } break;
+    case DataFormat::R32I:    { return 4;  } break;
+    case DataFormat::R32U:    { return 4;  } break;
     case DataFormat::R32F:    { return 4;  } break;
     case DataFormat::RG8:     { return 2;  } break;
     case DataFormat::RG16:    { return 4;  } break;
@@ -263,7 +309,8 @@ static void dxSetPipelineState(PipelineStateHandle handle)
         g_pImmediateContext->OMSetBlendState(impl->blendState, nullptr, 0xffffffff);
         g_pImmediateContext->OMSetDepthStencilState(impl->depthStencilState, impl->stencilRef);
 
-        g_pImmediateContext->IASetInputLayout(impl->vertexFormat->inputLayout);
+        //g_pImmediateContext->IASetInputLayout(impl->vertexFormat->inputLayout);
+        g_pImmediateContext->IASetInputLayout(nullptr);
 
         g_pImmediateContext->VSSetShader(impl->shader->vs, nullptr, 0);
         g_pImmediateContext->HSSetShader(impl->shader->hs, nullptr, 0);
@@ -278,76 +325,116 @@ static void dxProcessDrawQueue(internal::DrawQueue* queue)
     PipelineStateImpl* psimpl = static_cast<PipelineStateImpl*>(queue->getState().value);
 
     dxSetPipelineState(queue->getState());
-
-    // draw calls batched
-    //   max slots        : 128
-    //   constant buffers : 8
-    //   textures         : 120
+    g_pImmediateContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
 #if 1 // temporary
-    size_t numInstances = queue->getDrawCalls().GetSize();
-    psimpl->constantBuffer.setSize(internal::DrawCall::ConstantBufferSize * numInstances, numInstances);
 
-    // update constants
-    D3D11_MAPPED_SUBRESOURCE mappedData;
-    if (FAILED(g_pImmediateContext->Map(psimpl->constantBuffer.dataBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedData))) {
-        // TODO: error handling
-    }
-    uint8_t* dataPtr = reinterpret_cast<uint8_t*>(mappedData.pData);
-    for (size_t i = 0; i < queue->getDrawCalls().GetSize(); ++i) {
-        size_t offset = i * internal::DrawCall::ConstantBufferSize;
+//#define DC_CHECK_PROCESSED
+#ifdef DC_CHECK_PROCESSED
+    size_t _checkProcessedCalls = 0;
+#endif
 
-        std::memcpy(dataPtr + offset, queue->getDrawCalls()[i].constantBufferData, internal::DrawCall::ConstantBufferSize);
-    }
-    g_pImmediateContext->Unmap(psimpl->constantBuffer.dataBuffer, 0);
+    for (const internal::DrawQueue::BufferPair& bufferPair: queue->bufferPairs) {
+        psimpl->tmpDrawCalls.Clear();
 
-    const internal::DrawCall& call = queue->getDrawCalls()[0]; {
-        ID3D11Buffer* vb = static_cast<ID3D11Buffer*>(call.vertexBuffer.value);
-        ID3D11Buffer* ib = static_cast<ID3D11Buffer*>(call.indexBuffer.value);
+        // collect draw calls
+        for (const internal::DrawCall& call: queue->getDrawCalls()) {
+            internal::DrawQueue::BufferPair bp;
+            bp.vb = call.vertexBuffer;
+            bp.ib = call.indexBuffer;
 
-        UINT offset = 0;
-
-        g_pImmediateContext->IASetPrimitiveTopology(MapPrimitiveTopology[static_cast<uint64_t>(call.primitiveTopology)]);
-        g_pImmediateContext->IASetVertexBuffers(0, 1, &vb, &psimpl->vertexFormat->stride, &offset);
-        g_pImmediateContext->IASetIndexBuffer(ib, DXGI_FORMAT_R32_UINT, 0);
-
-        g_pImmediateContext->VSSetShaderResources(0, 1, &psimpl->constantBuffer.dataView);
-        g_pImmediateContext->HSSetShaderResources(0, 1, &psimpl->constantBuffer.dataView);
-        g_pImmediateContext->DSSetShaderResources(0, 1, &psimpl->constantBuffer.dataView);
-        g_pImmediateContext->GSSetShaderResources(0, 1, &psimpl->constantBuffer.dataView);
-        g_pImmediateContext->PSSetShaderResources(0, 1, &psimpl->constantBuffer.dataView);
-
-        if (call.type == internal::DrawCall::Draw)
-            g_pImmediateContext->DrawInstanced(call.count, numInstances, call.startVertex, 0);
-        else if (call.type == internal::DrawCall::DrawIndexed)
-            g_pImmediateContext->DrawIndexedInstanced(call.count, numInstances, call.startIndex, call.startVertex, 0);
-    }
-#else // straightforward implementation
-    for (internal::DrawCall& call: queue->getDrawCalls()) {
-        ID3D11Buffer* vb = static_cast<ID3D11Buffer*>(call.vertexBuffer.value);
-        ID3D11Buffer* ib = static_cast<ID3D11Buffer*>(call.indexBuffer.value);
-
-        UINT offset = 0;
-
-        g_pImmediateContext->IASetPrimitiveTopology(MapPrimitiveTopology[static_cast<uint64_t>(call.primitiveTopology)]);
-        g_pImmediateContext->IASetVertexBuffers(0, 1, &vb, &psimpl->vertexFormat->stride, &offset);
-        g_pImmediateContext->IASetIndexBuffer(ib, DXGI_FORMAT_R32_UINT, 0);
-
-        for (size_t i = 0; i < internal::DrawCall::MaxConstantBuffers; ++i) {
-            if (call.usedConstantBuffers & (1 << i))
-                g_pImmediateContext->UpdateSubresource(psimpl->constantBuffers[i], 0, nullptr, call.constantBufferData, 0, 0);
-
-            g_pImmediateContext->VSSetConstantBuffers(i, 1, &psimpl->constantBuffers[i]);
-            g_pImmediateContext->HSSetConstantBuffers(i, 1, &psimpl->constantBuffers[i]);
-            g_pImmediateContext->DSSetConstantBuffers(i, 1, &psimpl->constantBuffers[i]);
-            g_pImmediateContext->GSSetConstantBuffers(i, 1, &psimpl->constantBuffers[i]);
-            g_pImmediateContext->PSSetConstantBuffers(i, 1, &psimpl->constantBuffers[i]);
+            if (bp == bufferPair) {
+                psimpl->tmpDrawCalls.Add(call);
+#ifdef DC_CHECK_PROCESSED
+                _checkProcessedCalls++;
+#endif
+            }
         }
 
-        if (call.type == internal::DrawCall::Draw)
-            g_pImmediateContext->Draw(call.count, call.startVertex);
-        else if (call.type == internal::DrawCall::DrawIndexed)
-            g_pImmediateContext->DrawIndexed(call.count, call.startIndex, call.startVertex);
+        size_t numInstances = psimpl->tmpDrawCalls.GetSize();
+
+        // process draw calls
+        psimpl->constantBuffer.setConstant(
+           internal::DrawCall::ConstantBufferSize * numInstances,
+           internal::DrawCall::ConstantBufferSize,
+           numInstances
+        );
+
+        // update constants
+        {
+            D3D11_MAPPED_SUBRESOURCE mappedData;
+            if (FAILED(g_pImmediateContext->Map(psimpl->constantBuffer.dataBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedData))) {
+                // TODO: error handling
+                return;
+            }
+            uint8_t* dataPtr = reinterpret_cast<uint8_t*>(mappedData.pData);
+            for (size_t i = 0; i < numInstances; ++i) {
+                size_t offset = i * internal::DrawCall::ConstantBufferSize;
+
+                std::memcpy(dataPtr + offset, psimpl->tmpDrawCalls[i].constantBufferData, internal::DrawCall::ConstantBufferSize);
+            }
+            g_pImmediateContext->Unmap(psimpl->constantBuffer.dataBuffer, 0);
+        }
+
+        const internal::DrawCall& call = psimpl->tmpDrawCalls[0];
+
+        DXSharedBuffer* vb = static_cast<DXSharedBuffer*>(call.vertexBuffer.value);
+        DXSharedBuffer* ib = static_cast<DXSharedBuffer*>(call.indexBuffer.value);
+
+        ID3D11ShaderResourceView* vbibViews[2] = { vb->dataView, ib->dataView };
+
+        g_pImmediateContext->VSSetShaderResources(0, 2, vbibViews);
+
+        g_pImmediateContext->VSSetShaderResources(0 + 2, 1, &psimpl->constantBuffer.dataView);
+        g_pImmediateContext->HSSetShaderResources(0 + 2, 1, &psimpl->constantBuffer.dataView);
+        g_pImmediateContext->DSSetShaderResources(0 + 2, 1, &psimpl->constantBuffer.dataView);
+        g_pImmediateContext->GSSetShaderResources(0 + 2, 1, &psimpl->constantBuffer.dataView);
+        g_pImmediateContext->PSSetShaderResources(0 + 2, 1, &psimpl->constantBuffer.dataView);
+
+        g_pImmediateContext->DrawInstanced(call.count, numInstances, 0, 0);
+    }
+
+#ifdef DC_CHECK_PROCESSED
+    if (_checkProcessedCalls != queue->getDrawCalls().GetSize())
+        OutputDebugString("Not all draw calls were processed!\n");
+#endif
+
+#else // straightforward implementation
+    for (size_t i = 0; i < queue->getDrawCalls().GetSize(); ++i) {
+        const internal::DrawCall& call = queue->getDrawCalls()[i];
+
+        psimpl->constantBuffer.setConstant(
+            internal::DrawCall::ConstantBufferSize,
+            internal::DrawCall::ConstantBufferSize,
+            1
+        );
+
+        // update constants
+        {
+            D3D11_MAPPED_SUBRESOURCE mappedData;
+            if (FAILED(g_pImmediateContext->Map(psimpl->constantBuffer.dataBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedData))) {
+                // TODO: error handling
+                return;
+            }
+            uint8_t* dataPtr = reinterpret_cast<uint8_t*>(mappedData.pData);
+            std::memcpy(dataPtr , call.constantBufferData, internal::DrawCall::ConstantBufferSize);
+            g_pImmediateContext->Unmap(psimpl->constantBuffer.dataBuffer, 0);
+        }
+
+        DXSharedBuffer* vb = static_cast<DXSharedBuffer*>(call.vertexBuffer.value);
+        DXSharedBuffer* ib = static_cast<DXSharedBuffer*>(call.indexBuffer.value);
+
+        ID3D11ShaderResourceView* vbibViews[2] = { vb->dataView, ib->dataView };
+
+        g_pImmediateContext->VSSetShaderResources(0, 2, vbibViews);
+
+        g_pImmediateContext->VSSetShaderResources(0 + 2, 1, &psimpl->constantBuffer.dataView);
+        g_pImmediateContext->HSSetShaderResources(0 + 2, 1, &psimpl->constantBuffer.dataView);
+        g_pImmediateContext->DSSetShaderResources(0 + 2, 1, &psimpl->constantBuffer.dataView);
+        g_pImmediateContext->GSSetShaderResources(0 + 2, 1, &psimpl->constantBuffer.dataView);
+        g_pImmediateContext->PSSetShaderResources(0 + 2, 1, &psimpl->constantBuffer.dataView);
+
+        g_pImmediateContext->Draw(call.count, 0);
     }
 #endif
 }
@@ -759,31 +846,10 @@ void releasePipelineState(PipelineStateHandle handle)
     }
 }
 
-BufferHandle createBuffer(BufferType type, void* mem, size_t size)
+BufferHandle createBuffer(void* mem, size_t size, size_t stride)
 {
-    UINT bindFlags = 0;
-    switch (type) {
-    case BufferType::Vertex:   { bindFlags = D3D11_BIND_VERTEX_BUFFER;    } break;
-    case BufferType::Index:    { bindFlags = D3D11_BIND_INDEX_BUFFER;     } break;
-    }
-
-    D3D11_BUFFER_DESC desc;
-    desc.ByteWidth           = size;
-    desc.Usage               = D3D11_USAGE_IMMUTABLE;
-    desc.BindFlags           = bindFlags;
-    desc.CPUAccessFlags      = 0;
-    desc.MiscFlags           = 0;
-    desc.StructureByteStride = 0;
-
-    D3D11_SUBRESOURCE_DATA data;
-    data.pSysMem          = mem;
-    data.SysMemPitch      = 0;
-    data.SysMemSlicePitch = 0;
-
-    ID3D11Buffer* buffer = nullptr;
-    if (FAILED(g_pd3dDevice->CreateBuffer(&desc, &data, &buffer))) {
-        return BufferHandle::invalidHandle();
-    }
+    DXSharedBuffer* buffer = new DXSharedBuffer;
+    buffer->setImmutable(mem, size, stride);
 
     return BufferHandle(buffer);
 }
@@ -791,8 +857,8 @@ BufferHandle createBuffer(BufferType type, void* mem, size_t size)
 void releaseBuffer(BufferHandle handle)
 {
     if (handle != BufferHandle::invalidHandle()) {
-        ID3D11Buffer* buffer = static_cast<ID3D11Buffer*>(handle.value);
-        buffer->Release();
+        DXSharedBuffer* buffer = static_cast<DXSharedBuffer*>(handle.value);
+        delete buffer;
     }
 }
 

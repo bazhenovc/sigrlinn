@@ -18,6 +18,8 @@ struct Handle
     inline bool operator==(const Handle& handle) { return value == handle.value; }
     inline bool operator!=(const Handle& handle) { return value != handle.value; }
     inline static Handle invalidHandle()         { return Handle(static_cast<T>(0)); }
+
+    inline friend bool operator==(const Handle& h0, const Handle& h1) { return h0.value == h1.value; }
 };
 
 typedef Handle<void*,  1> VertexShaderHandle;
@@ -100,7 +102,8 @@ enum class DataFormat : uint64_t
     R8,
     R16,
     R16F,
-    R32,
+    R32I,
+    R32U,
     R32F,
     RG8,
     RG16,
@@ -432,11 +435,13 @@ PipelineStateHandle createPipelineState(const PipelineStateDescriptor& desc);
 void                releasePipelineState(PipelineStateHandle handle);
 
 // buffers
-BufferHandle          createBuffer(BufferType type, void* mem, size_t size);
+BufferHandle          createBuffer(void* mem, size_t size, size_t stride);
 void                  releaseBuffer(BufferHandle handle); // use this to release all kinds of buffers
 
+#if 0 // do not use, transient buffers are temporary not compatible with vertex/index buffers
 TransientBufferHandle createTransientBuffer(TransientBufferType type, void* mem, size_t size);
 void                  updateTransientBuffer(TransientBufferHandle handle, void* mem, size_t size, size_t offset);
+#endif
 
 // textures
 Texture1DHandle createTexture1D(uint32_t width, DataFormat format, size_t numMipmaps);
