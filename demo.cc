@@ -58,7 +58,7 @@ bool LoadShader(const char* path, sgfx::ShaderCompileTarget target, void*& outDa
         return sgfx::compileShader(
             sourceCode,
             size,
-            sgfx::ShaderCompileVersion::v5_0,
+            sgfx::ShaderCompileVersion::v4_0,
             target,
             nullptr, 0,
             0,
@@ -119,6 +119,8 @@ struct SimpleVertex
 
 struct ConstantBuffer
 {
+    uint32_t bufferIDs[4]; // TODO: refactor, should be hidden
+
     XMMATRIX mWorld;
     XMMATRIX mView;
     XMMATRIX mProjection;
@@ -167,8 +169,8 @@ void LoadSampleData()
 
     for (int i = 0; i < 6; ++i) {
         for (int j = 0; j < 8; ++j) vertices[j].Color = colors[i];
-        cubeVertexBuffers[i] = sgfx::createBuffer(vertices, sizeof(SimpleVertex) * 8, sizeof(SimpleVertex));
-        cubeIndexBuffers[i]  = sgfx::createBuffer(indices, sizeof(uint32_t) * 36, sizeof(uint32_t));
+        cubeVertexBuffers[i] = sgfx::createBuffer(sgfx::BufferType::Vertex, vertices, sizeof(SimpleVertex) * 8, sizeof(SimpleVertex));
+        cubeIndexBuffers[i]  = sgfx::createBuffer(sgfx::BufferType::Index, indices, sizeof(uint32_t) * 36, sizeof(uint32_t));
     }
 
     vsData   = loadVS("shaders/sample0.hlsl", vertexFormat, vertexFormatSize);
@@ -242,6 +244,8 @@ void ReleaseSampleData()
     sgfx::releaseSurfaceShader(ssHandle);
     sgfx::releasePipelineState(pipelineState);
     sgfx::releaseDrawQueue(drawQueue);
+
+    sgfx::shutdown();
 }
 
 void RenderSample()
@@ -266,13 +270,14 @@ void RenderSample()
     g_World *= XMMatrixRotationY(t);
 
     ConstantBuffer constants;
+    std::memset(constants.bufferIDs, 0, sizeof(constants.bufferIDs));
     constants.mWorld      = XMMatrixTranspose(g_World);
     constants.mView       = XMMatrixTranspose(g_View);
     constants.mProjection = XMMatrixTranspose(g_Projection);
 
     // actually draw some stuff
     size_t counter = 0;
-    for (int i = -64; i < 64; ++i) {
+    for (int i = -128; i < 128; ++i) {
         for (int k = -64; k < 64; ++k) {
             constants.mWorld = XMMatrixTranspose(
                 g_World * XMMatrixTranslation(
@@ -368,7 +373,7 @@ HRESULT InitWindow(HINSTANCE hInstance, int nCmdShow)
 
     // Create window
     g_hInst = hInstance;
-    RECT rc = { 0, 0, 640, 480 };
+    RECT rc = { 0, 0, 1024, 768 };
     AdjustWindowRect(&rc, WS_OVERLAPPEDWINDOW, FALSE);
     g_hWnd = CreateWindowA(
         "SigrlinnWC",
@@ -442,8 +447,8 @@ HRESULT InitDevice()
     UINT numDriverTypes = ARRAYSIZE(driverTypes);
 
     D3D_FEATURE_LEVEL featureLevels[] = {
-        D3D_FEATURE_LEVEL_11_0,
-        D3D_FEATURE_LEVEL_10_1,
+        //D3D_FEATURE_LEVEL_11_0,
+        //D3D_FEATURE_LEVEL_10_1,
         D3D_FEATURE_LEVEL_10_0,
     };
     UINT numFeatureLevels = ARRAYSIZE(featureLevels);

@@ -10,11 +10,13 @@ StructuredBuffer<uint>       g_IndexBuffer;
 // pipeline state
 struct ConstantData
 {
+	uint4    bufferIDs;
+
 	float4x4 World;
 	float4x4 View;
 	float4x4 Projection;
 
-	float4   strideOffset[(2048 - 192) / 16];
+	float4   strideOffset[(2048 - 200) / 16];
 };
 StructuredBuffer<ConstantData> g_ConstantBuffer;
 
@@ -44,10 +46,13 @@ VS_OUTPUT vs_main(VS_INPUT input)
 	uint instanceID = input.instanceID;
 	uint vertexID   = input.vertexID;
 	uint drawType   = DRAW_INDEXED;
+
+	uint vbID = g_ConstantBuffer[instanceID].bufferIDs[0];
+	uint ibID = g_ConstantBuffer[instanceID].bufferIDs[1];
 	
 	VertexData vdata;
-	[branch] if (drawType == DRAW_INDEXED) vdata = g_VertexBuffer[g_IndexBuffer[vertexID]];
-	else     if (drawType == DRAW)         vdata = g_VertexBuffer[vertexID];
+	[branch] if (drawType == DRAW_INDEXED) vdata = g_VertexBuffer[vbID + g_IndexBuffer[ibID + vertexID]];
+	else     if (drawType == DRAW)         vdata = g_VertexBuffer[vbID + vertexID];
 
 	VS_OUTPUT output = (VS_OUTPUT)0;
 	output.position = mul(vdata.position,  g_ConstantBuffer[instanceID].World);

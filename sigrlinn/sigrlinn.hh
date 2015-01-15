@@ -343,6 +343,8 @@ bool initOpenGL();
 // NDACodeStripper v0.17: 1 line removed
 #endif
 
+void shutdown();
+
 uint64_t getGPUCaps();
 
 // shader compiler
@@ -435,7 +437,7 @@ PipelineStateHandle createPipelineState(const PipelineStateDescriptor& desc);
 void                releasePipelineState(PipelineStateHandle handle);
 
 // buffers
-BufferHandle          createBuffer(void* mem, size_t size, size_t stride);
+BufferHandle          createBuffer(BufferType type, void* mem, size_t size, size_t stride);
 void                  releaseBuffer(BufferHandle handle); // use this to release all kinds of buffers
 
 #if 0 // do not use, transient buffers are temporary not compatible with vertex/index buffers

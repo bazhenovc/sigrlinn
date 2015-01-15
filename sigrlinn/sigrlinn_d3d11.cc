@@ -145,9 +145,120 @@ static D3D11_INPUT_CLASSIFICATION MapVertexElementType[VertexElementType::Count]
 };
 static_assert((sizeof(MapVertexElementType) / sizeof(D3D11_INPUT_CLASSIFICATION)) == static_cast<size_t>(VertexElementType::Count), "Mapping is broken!");
 
-ID3D11Device*        g_pd3dDevice        = NULL;
-ID3D11DeviceContext* g_pImmediateContext = NULL;
-IDXGISwapChain*      g_pSwapChain        = NULL;
+//=============================================================================
+
+ID3D11Device*         g_pd3dDevice         = nullptr;
+ID3D11DeviceContext*  g_pImmediateContext  = nullptr;
+IDXGISwapChain*       g_pSwapChain         = nullptr;
+
+//=============================================================================
+
+struct DXLogicalMeshBuffer final
+{
+    uint8_t* data             = nullptr;
+    size_t   dataSize         = 0;
+    size_t   dataFormatStride = 0;
+    size_t   physicalAddress  = 0;
+
+    BufferType type;
+};
+
+struct DXPhysicalMeshBuffer final
+{
+    ID3D11Buffer*             physicalBuffer     = nullptr;
+    ID3D11ShaderResourceView* physicalBufferView = nullptr;
+    size_t                    physicalDataSize   = 0;
+    bool                      isDirty            = false;
+
+    typedef internal::DynamicArray<DXLogicalMeshBuffer*, 128, 128> PageArray;
+    PageArray allPages;
+
+    DXPhysicalMeshBuffer() = default;
+    inline ~DXPhysicalMeshBuffer()
+    {
+        if (physicalBuffer != nullptr)     physicalBuffer->Release();
+        if (physicalBufferView != nullptr) physicalBufferView->Release();
+    }
+
+    // both allocate() and release() do rebuildPages()
+    inline void allocate(DXLogicalMeshBuffer* logicalBuffer)
+    {
+        allPages.Add(logicalBuffer);
+        isDirty = true;
+    }
+
+    inline void release(DXLogicalMeshBuffer* logicalBuffer)
+    {
+        allPages.Remove(logicalBuffer);
+        isDirty = true;
+    }
+
+    inline void rebuildPages() // very expensive operation
+    {
+        if (!isDirty) return;
+
+        size_t vfStride = allPages[0]->dataFormatStride; // TODO: right now will not work with different strides
+
+        physicalDataSize = 0;
+        for (DXLogicalMeshBuffer* logicalBuffer: allPages) // calculate total size
+            physicalDataSize += logicalBuffer->dataSize;   // TODO: find a better place for this
+
+        //if (physicalDataSize >= 128 * 1024)
+        //    ; // TODO: error handling
+
+        size_t numElements = physicalDataSize / vfStride;
+
+        if (physicalBuffer != nullptr)     physicalBuffer->Release();
+        if (physicalBufferView != nullptr) physicalBufferView->Release();
+
+        D3D11_BUFFER_DESC bufferDesc;
+        bufferDesc.BindFlags           = D3D11_BIND_SHADER_RESOURCE;
+        bufferDesc.ByteWidth           = physicalDataSize;
+        bufferDesc.Usage               = D3D11_USAGE_DYNAMIC;
+        bufferDesc.MiscFlags           = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+        bufferDesc.StructureByteStride = vfStride;
+        bufferDesc.CPUAccessFlags      = D3D11_CPU_ACCESS_WRITE;
+
+        if (FAILED(g_pd3dDevice->CreateBuffer(&bufferDesc, nullptr, &physicalBuffer))) {
+            // TODO: error handling
+            return;
+        }
+
+        D3D11_SHADER_RESOURCE_VIEW_DESC viewDesc;
+        std::memset(&viewDesc, 0, sizeof(viewDesc));
+
+        viewDesc.Format              = DXGI_FORMAT_UNKNOWN;
+        viewDesc.ViewDimension       = D3D11_SRV_DIMENSION_BUFFER;
+        viewDesc.Buffer.ElementWidth = numElements;
+
+        if (FAILED(g_pd3dDevice->CreateShaderResourceView(physicalBuffer, &viewDesc, &physicalBufferView))) {
+            // TODO: error handling
+            return;
+        }
+
+        // fill the physical buffer
+        D3D11_MAPPED_SUBRESOURCE mappedData;
+        std::memset(&mappedData, 0, sizeof(mappedData));
+
+        if (FAILED(g_pImmediateContext->Map(physicalBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedData))) {
+            // TODO: error handling
+            return;
+        }
+
+        uint8_t* dataPtr = reinterpret_cast<uint8_t*>(mappedData.pData);
+        size_t pageOffset = 0;
+        for (size_t i = 0; i < allPages.GetSize(); ++i) {
+            DXLogicalMeshBuffer* logicalBuffer = allPages[i];
+            std::memcpy(dataPtr + pageOffset, logicalBuffer->data, logicalBuffer->dataSize);
+            logicalBuffer->physicalAddress = pageOffset / logicalBuffer->dataFormatStride;
+            pageOffset += logicalBuffer->dataSize;
+        }
+
+        g_pImmediateContext->Unmap(physicalBuffer, 0);
+
+        isDirty = false;
+    }
+};
 
 struct DXSharedBuffer final
 {
@@ -185,7 +296,7 @@ struct DXSharedBuffer final
         bufferData.pSysMem = mem;
 
         if (FAILED(g_pd3dDevice->CreateBuffer(&bufferDesc, &bufferData, &dataBuffer))) {
-            // TODO: oh fuck, how to handle this?
+            // TODO: error handling
             return;
         }
 
@@ -197,7 +308,7 @@ struct DXSharedBuffer final
         viewDesc.Buffer.ElementWidth = size / stride;
 
         if (FAILED(g_pd3dDevice->CreateShaderResourceView(dataBuffer, &viewDesc, &dataView))) {
-            // TODO: shit, no way to handle again
+            // TODO: error handling
             return;
         }
     }
@@ -221,7 +332,7 @@ struct DXSharedBuffer final
             bufferDesc.CPUAccessFlags      = D3D11_CPU_ACCESS_WRITE;
 
             if (FAILED(g_pd3dDevice->CreateBuffer(&bufferDesc, nullptr, &dataBuffer))) {
-                // TODO: oh fuck, how to handle this?
+                // TODO: error handling
                 return;
             }
 
@@ -233,12 +344,17 @@ struct DXSharedBuffer final
             viewDesc.Buffer.ElementWidth = numInstances;
 
             if (FAILED(g_pd3dDevice->CreateShaderResourceView(dataBuffer, &viewDesc, &dataView))) {
-                // TODO: shit, no way to handle again
+                // TODO: error handling
                 return;
             }
         }
     }
 };
+
+DXPhysicalMeshBuffer* g_physicalVertexBuffer = nullptr;
+DXPhysicalMeshBuffer* g_physicalIndexBuffer  = nullptr;
+
+//=============================================================================
 
 struct VertexFormatImpl final
 {
@@ -327,6 +443,9 @@ static void dxProcessDrawQueue(internal::DrawQueue* queue)
     dxSetPipelineState(queue->getState());
     g_pImmediateContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
+    g_physicalVertexBuffer->rebuildPages(); // TODO: move somewhere else
+    g_physicalIndexBuffer->rebuildPages(); // TODO: move somewhere else
+
 #if 1 // temporary
 
 //#define DC_CHECK_PROCESSED
@@ -334,7 +453,9 @@ static void dxProcessDrawQueue(internal::DrawQueue* queue)
     size_t _checkProcessedCalls = 0;
 #endif
 
-    for (const internal::DrawQueue::BufferPair& bufferPair: queue->bufferPairs) {
+    //for (const internal::DrawQueue::BufferPair& bufferPair: queue->bufferPairs) {
+    {
+#if 0
         psimpl->tmpDrawCalls.Clear();
 
         // collect draw calls
@@ -350,6 +471,8 @@ static void dxProcessDrawQueue(internal::DrawQueue* queue)
 #endif
             }
         }
+#endif
+        psimpl->tmpDrawCalls = queue->getDrawCalls(); // temporary
 
         size_t numInstances = psimpl->tmpDrawCalls.GetSize();
 
@@ -372,16 +495,22 @@ static void dxProcessDrawQueue(internal::DrawQueue* queue)
                 size_t offset = i * internal::DrawCall::ConstantBufferSize;
 
                 std::memcpy(dataPtr + offset, psimpl->tmpDrawCalls[i].constantBufferData, internal::DrawCall::ConstantBufferSize);
+
+                // HACK!!!
+                struct VBIB { uint32_t vb; uint32_t ib; };
+                VBIB* vbib = reinterpret_cast<VBIB*>(dataPtr + offset);
+                vbib->vb = static_cast<DXLogicalMeshBuffer*>(psimpl->tmpDrawCalls[i].vertexBuffer.value)->physicalAddress;
+                vbib->ib = static_cast<DXLogicalMeshBuffer*>(psimpl->tmpDrawCalls[i].indexBuffer.value)->physicalAddress;
             }
             g_pImmediateContext->Unmap(psimpl->constantBuffer.dataBuffer, 0);
         }
 
         const internal::DrawCall& call = psimpl->tmpDrawCalls[0];
 
-        DXSharedBuffer* vb = static_cast<DXSharedBuffer*>(call.vertexBuffer.value);
-        DXSharedBuffer* ib = static_cast<DXSharedBuffer*>(call.indexBuffer.value);
-
-        ID3D11ShaderResourceView* vbibViews[2] = { vb->dataView, ib->dataView };
+        ID3D11ShaderResourceView* vbibViews[2] = {
+            g_physicalVertexBuffer->physicalBufferView,
+            g_physicalIndexBuffer->physicalBufferView
+        };
 
         g_pImmediateContext->VSSetShaderResources(0, 2, vbibViews);
 
@@ -447,7 +576,16 @@ bool initD3D11(void* d3dDevice, void* d3dContext, void* d3dSwapChain)
     g_pImmediateContext = static_cast<ID3D11DeviceContext*>(d3dContext);
     g_pSwapChain        = static_cast<IDXGISwapChain*>(d3dSwapChain);
 
+    g_physicalVertexBuffer = new DXPhysicalMeshBuffer;
+    g_physicalIndexBuffer  = new DXPhysicalMeshBuffer;
+
     return true;
+}
+
+void shutdown()
+{
+    delete g_physicalVertexBuffer;
+    delete g_physicalIndexBuffer;
 }
 
 // shader compiling
@@ -846,19 +984,36 @@ void releasePipelineState(PipelineStateHandle handle)
     }
 }
 
-BufferHandle createBuffer(void* mem, size_t size, size_t stride)
+BufferHandle createBuffer(BufferType type, void* mem, size_t size, size_t stride)
 {
-    DXSharedBuffer* buffer = new DXSharedBuffer;
-    buffer->setImmutable(mem, size, stride);
+    DXLogicalMeshBuffer* logicalBuffer = new DXLogicalMeshBuffer;
+    logicalBuffer->data                = new uint8_t[size];
+    logicalBuffer->dataSize            = size;
+    logicalBuffer->dataFormatStride    = stride;
+    logicalBuffer->type                = type;
 
-    return BufferHandle(buffer);
+    std::memcpy(logicalBuffer->data, mem, size);
+
+    switch (type) {
+    case BufferType::Vertex: { g_physicalVertexBuffer->allocate(logicalBuffer); } break;
+    case BufferType::Index:  { g_physicalIndexBuffer->allocate(logicalBuffer);  } break;
+    };
+
+    return BufferHandle(logicalBuffer);
 }
 
 void releaseBuffer(BufferHandle handle)
 {
     if (handle != BufferHandle::invalidHandle()) {
-        DXSharedBuffer* buffer = static_cast<DXSharedBuffer*>(handle.value);
-        delete buffer;
+        DXLogicalMeshBuffer* logicalBuffer = static_cast<DXLogicalMeshBuffer*>(handle.value);
+
+        switch (logicalBuffer->type) {
+        case BufferType::Vertex: { g_physicalVertexBuffer->release(logicalBuffer); } break;
+        case BufferType::Index:  { g_physicalIndexBuffer->release(logicalBuffer);  } break;
+        };
+
+        delete [] logicalBuffer->data;
+        delete logicalBuffer;
     }
 }
 
