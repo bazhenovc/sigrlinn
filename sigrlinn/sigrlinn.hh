@@ -29,8 +29,7 @@ typedef Handle<void*,  4> GeometryShaderHandle;
 typedef Handle<void*,  5> PixelShaderHandle;
 typedef Handle<void*,  6> SurfaceShaderHandle; // VS+HS+DS+GS+PS
 typedef Handle<void*,  7> ComputeShaderHandle;
-typedef Handle<void*,  8> VertexFormatHandle;
-typedef Handle<void*,  9> PipelineStateHandle;
+typedef Handle<void*,  8> PipelineStateHandle;
 
 typedef Handle<void*, 10> SamplerStateHandle;
 
@@ -301,27 +300,6 @@ struct PipelineStateDescriptor
     BlendState          blendState;
     DepthStencilState   depthStencilState;
     SurfaceShaderHandle shader;
-    VertexFormatHandle  vertexFormat;
-};
-
-// vertex stage
-
-enum class VertexElementType : uint64_t
-{
-    PerVertex,
-    PerInstance,
-
-    Count
-};
-
-struct VertexElementDescriptor
-{
-    const char*       semanticName;
-    uint32_t          semanticIndex;
-    DataFormat        format;
-    uint32_t          slot;
-    uint64_t          offset;
-    VertexElementType type;
 };
 
 // caps
@@ -425,14 +403,6 @@ void                releaseComputeShader(ComputeShaderHandle handle);
 void                dispatchComputeShader(ComputeShaderHandle handle, uint32_t x, uint32_t y, uint32_t z);
 
 // pipeline state
-VertexFormatHandle createVertexFormat(
-    VertexElementDescriptor* elements,
-    size_t                   size,
-    void* shaderBytecode, size_t shaderBytecodeSize,
-    ErrorReportFunc errorReport
-);
-void                releaseVertexFormat(VertexFormatHandle handle);
-
 PipelineStateHandle createPipelineState(const PipelineStateDescriptor& desc);
 void                releasePipelineState(PipelineStateHandle handle);
 

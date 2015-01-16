@@ -14,10 +14,10 @@ namespace internal
 // emulated draw queues for pre-DX12 APIs (DX11 and GL4)
 struct DrawCall final
 {
-    enum Type
+    enum Type : uint32_t
     {
-        Draw,
-        DrawIndexed
+        Draw        = 0,
+        DrawIndexed = 1
     };
 
     enum
@@ -63,19 +63,6 @@ private:
 
 public:
 
-    struct BufferPair
-    {
-        BufferHandle vb;
-        BufferHandle ib;
-
-        inline friend bool operator==(const BufferPair& b0, const BufferPair& b1)
-        {
-            return b0.vb == b1.vb && b0.ib == b1.ib;
-        }
-    };
-    typedef DynamicArray<BufferPair, 128, 512> BufferPairArray;
-    BufferPairArray bufferPairs;
-
     DrawQueue(PipelineStateHandle _state) : state(_state) {}
 
     inline PipelineStateHandle  getState() const     { return state; }
@@ -84,17 +71,6 @@ public:
     inline void clear()
     {
         drawCalls.Clear();
-        bufferPairs.Clear();
-    }
-
-    inline void allocateBufferPair()
-    {
-        BufferPair pair;
-        pair.vb = currentDrawCall.vertexBuffer;
-        pair.ib = currentDrawCall.indexBuffer;
-
-        if (bufferPairs.Find(pair) == -1)
-            bufferPairs.Add(pair);
     }
 
     inline void setPrimitiveTopology(PrimitiveTopology topology)     { currentDrawCall.primitiveTopology = topology; }
@@ -113,7 +89,6 @@ public:
 
     inline void draw(uint32_t count, uint32_t startVertex)
     {
-        allocateBufferPair();
         currentDrawCall.count       = count;
         currentDrawCall.startVertex = startVertex;
         currentDrawCall.startIndex  = 0;
@@ -124,7 +99,6 @@ public:
 
     inline void drawIndexed(uint32_t count, uint32_t startIndex, uint32_t startVertex)
     {
-        allocateBufferPair();
         currentDrawCall.count       = count;
         currentDrawCall.startVertex = startVertex;
         currentDrawCall.startIndex  = startIndex;
