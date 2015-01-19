@@ -26,7 +26,7 @@ bool Application::loadShader(const char* path, sgfx::ShaderCompileTarget target,
         return sgfx::compileShader(
             sourceCode,
             size,
-            sgfx::ShaderCompileVersion::v4_0,
+            sgfx::ShaderCompileVersion::v5_0,
             target,
             nullptr, 0,
             0,
@@ -54,6 +54,21 @@ sgfx::VertexShaderHandle Application::loadVS(const char* path)
     return sgfx::VertexShaderHandle::invalidHandle();
 }
 
+sgfx::GeometryShaderHandle Application::loadGS(const char* path)
+{
+    void* bytecode      = nullptr;
+    size_t bytecodeSize = 0;
+
+    if (loadShader(path, sgfx::ShaderCompileTarget::GS, bytecode, bytecodeSize)) {
+        sgfx::GeometryShaderHandle ret = sgfx::createGeometryShader(bytecode, bytecodeSize);
+        OutputDebugString("Geometry shader compiled.\n");
+        delete [] bytecode;
+        return ret;
+    }
+
+    return sgfx::GeometryShaderHandle::invalidHandle();
+}
+
 sgfx::PixelShaderHandle Application::loadPS(const char* path)
 {
     void* bytecode      = nullptr;
@@ -67,5 +82,20 @@ sgfx::PixelShaderHandle Application::loadPS(const char* path)
     }
 
     return sgfx::PixelShaderHandle::invalidHandle();
+}
+
+sgfx::ComputeShaderHandle Application::loadCS(const char* path)
+{
+    void* bytecode      = nullptr;
+    size_t bytecodeSize = 0;
+
+    if (loadShader(path, sgfx::ShaderCompileTarget::CS, bytecode, bytecodeSize)) {
+        sgfx::ComputeShaderHandle ret = sgfx::createComputeShader(bytecode, bytecodeSize);
+        OutputDebugString("Compute shader compiled.\n");
+        delete [] bytecode;
+        return ret;
+    }
+
+    return sgfx::ComputeShaderHandle::invalidHandle();
 }
 

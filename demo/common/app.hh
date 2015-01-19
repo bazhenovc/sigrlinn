@@ -33,8 +33,10 @@ protected:
     uint32_t height = 768;
 
     bool loadShader(const char* path, sgfx::ShaderCompileTarget target, void*& outData, size_t& outSize);
-    sgfx::VertexShaderHandle loadVS(const char* path);
-    sgfx::PixelShaderHandle  loadPS(const char* path);
+    sgfx::VertexShaderHandle   loadVS(const char* path);
+    sgfx::GeometryShaderHandle loadGS(const char* path);
+    sgfx::PixelShaderHandle    loadPS(const char* path);
+    sgfx::ComputeShaderHandle  loadCS(const char* path);
 
 public:
 

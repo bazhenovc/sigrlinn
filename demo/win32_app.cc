@@ -4,7 +4,7 @@
 
 #pragma comment(lib, "d3d11.lib")
 
-#include "app.hh"
+#include "common/app.hh"
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {

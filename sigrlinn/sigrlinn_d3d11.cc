@@ -902,7 +902,7 @@ void releaseBuffer(BufferHandle handle)
         delete logicalBuffer;
     }
 }
-
+#if 0
 TransientBufferHandle createTransientBuffer(TransientBufferType type, void* mem, size_t size)
 {
     UINT bindFlags = 0;
@@ -955,7 +955,7 @@ void updateTransientBuffer(TransientBufferHandle handle, void* mem, size_t size,
         );
     }
 }
-
+#endif
 DrawQueueHandle createDrawQueue(PipelineStateHandle state)
 {
     internal::DrawQueue* queue = new internal::DrawQueue(state);
