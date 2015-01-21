@@ -45,8 +45,11 @@ add_library(Sigrlinn STATIC
 	sigrlinn/GL/wglew.h
 )
 
-add_executable(AsteroidsDemo WIN32 demo/demo_asteroids.cc demo/win32_app.cc)
-target_link_libraries(AsteroidsDemo Sigrlinn)
+#add_executable(AsteroidsDemo WIN32 demo/demo_asteroids.cc demo/win32_app.cc)
+#target_link_libraries(AsteroidsDemo Sigrlinn)
+
+add_executable(Cube WIN32 demo/demo_cube.cc demo/win32_app.cc)
+target_link_libraries(Cube Sigrlinn)
 
 #add_executable(NBody WIN32 demo/demo_nbody.cc demo/win32_app.cc)
 #target_link_libraries(NBody Sigrlinn)

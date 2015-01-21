@@ -31,6 +31,8 @@ typedef Handle<void*,  6> SurfaceShaderHandle; // VS+HS+DS+GS+PS
 typedef Handle<void*,  7> ComputeShaderHandle;
 typedef Handle<void*,  8> PipelineStateHandle;
 
+typedef Handle<void*,  9> VertexFormatHandle;
+
 typedef Handle<void*, 10> SamplerStateHandle;
 
 // same tag for textures is intended
@@ -41,32 +43,26 @@ typedef Handle<void*, 11> Texture3DHandle;
 typedef Handle<void*, 11> CubemapHandle;
 
 // same tag for buffers is intended
-typedef Handle<void*, 12> BufferHandle;          // cannot be changed after creation
-typedef Handle<void*, 12> TransientBufferHandle; // can be updated
-typedef Handle<void*, 12> DynamicBufferHandle;   // can be mapped
+typedef Handle<void*, 12> BufferHandle;
+typedef Handle<void*, 13> ConstantBufferHandle;
 
 // draw queue
-typedef Handle<void*, 13> DrawQueueHandle;
+typedef Handle<void*, 14> DrawQueueHandle;
 
 // buffers
-enum class BufferType
-{
-    Vertex,
-    Index
+namespace BufferFlags {
+enum : uint32_t {
+    VertexBuffer     = (1U << 0), // can be set as a vertex buffer
+    IndexBuffer      = (1U << 1), // can be set as an index buffer
+    StructuredBuffer = (1U << 2), // can be set as a structured buffer
+    CPURead          = (1U << 3), // can be mapped to be read by the CPU
+    CPUWrite         = (1U << 4), // can be mapped to be written by the CPU
+    GPUWrite         = (1U << 5), // can be written by the GPU
+    StreamOutput     = (1U << 6), // can be used as a stream output buffer
 };
-
-enum class TransientBufferType
-{
-    Vertex,
-    Index,
-    Constant,
-    Storage
-};
-
-typedef TransientBufferType DynamicBufferType;
+}
 
 // formats
-
 enum class PrimitiveTopology : uint64_t
 {
     TriangleList,
@@ -300,6 +296,26 @@ struct PipelineStateDescriptor
     BlendState          blendState;
     DepthStencilState   depthStencilState;
     SurfaceShaderHandle shader;
+    VertexFormatHandle  vertexFormat;
+};
+
+// vertex stage
+enum class VertexElementType : uint64_t
+{
+    PerVertex,
+    PerInstance,
+
+    Count
+};
+
+struct VertexElementDescriptor
+{
+    const char*       semanticName;
+    uint32_t          semanticIndex;
+    DataFormat        format;
+    uint32_t          slot;
+    uint64_t          offset;
+    VertexElementType type;
 };
 
 // caps
@@ -403,17 +419,24 @@ void                releaseComputeShader(ComputeShaderHandle handle);
 void                dispatchComputeShader(ComputeShaderHandle handle, uint32_t x, uint32_t y, uint32_t z);
 
 // pipeline state
-PipelineStateHandle createPipelineState(const PipelineStateDescriptor& desc);
-void                releasePipelineState(PipelineStateHandle handle);
+VertexFormatHandle createVertexFormat(
+    VertexElementDescriptor* elements,
+    size_t                   size,
+    void* shaderBytecode, size_t shaderBytecodeSize,
+    ErrorReportFunc          errorReport
+);
+void                  releaseVertexFormat(VertexFormatHandle handle);
+
+PipelineStateHandle   createPipelineState(const PipelineStateDescriptor& desc);
+void                  releasePipelineState(PipelineStateHandle handle);
 
 // buffers
-BufferHandle          createBuffer(BufferType type, void* mem, size_t size, size_t stride);
+BufferHandle          createBuffer(uint32_t flags, void* mem, size_t size, size_t stride);
 void                  releaseBuffer(BufferHandle handle); // use this to release all kinds of buffers
 
-#if 0 // do not use, transient buffers are temporary not compatible with vertex/index buffers
-TransientBufferHandle createTransientBuffer(TransientBufferType type, void* mem, size_t size);
-void                  updateTransientBuffer(TransientBufferHandle handle, void* mem, size_t size, size_t offset);
-#endif
+ConstantBufferHandle  createConstantBuffer(void* mem, size_t size);
+void                  updateConstantBuffer(ConstantBufferHandle handle, void* mem);
+void                  releaseConstantBuffer(ConstantBufferHandle handle);
 
 // textures
 Texture1DHandle createTexture1D(uint32_t width, DataFormat format, size_t numMipmaps);
@@ -428,7 +451,10 @@ void            releaseDrawQueue(DrawQueueHandle handle);
 void            setPrimitiveTopology(DrawQueueHandle qd, PrimitiveTopology topology);
 void            setVertexBuffer(DrawQueueHandle dq, BufferHandle vb);
 void            setIndexBuffer(DrawQueueHandle dq, BufferHandle ib);
-void            setConstants(DrawQueueHandle dq, uint32_t idx, void* constantsData, size_t constantsSize);
+
+void            setConstantBuffer(DrawQueueHandle handle, uint32_t idx, ConstantBufferHandle buffer);
+void            setResource(DrawQueueHandle handle, uint32_t idx, BufferHandle resource);
+void            setResourceRW(DrawQueueHandle handle, uint32_t idx, BufferHandle resource);
 
 void            draw(DrawQueueHandle dq, uint32_t count, uint32_t startVertex);
 void            drawIndexed(DrawQueueHandle dq, uint32_t count, uint32_t startIndex, uint32_t startVertex);

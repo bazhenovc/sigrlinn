@@ -6,7 +6,7 @@
 
 Application* ApplicationInstance = nullptr;
 
-static void genericErrorReporter(const char* msg)
+void Application::genericErrorReporter(const char* msg)
 {
     OutputDebugString(msg);
 }
@@ -30,7 +30,7 @@ bool Application::loadShader(const char* path, sgfx::ShaderCompileTarget target,
             target,
             nullptr, 0,
             0,
-            genericErrorReporter,
+            Application::genericErrorReporter,
             outData,
             outSize
         );
@@ -97,5 +97,24 @@ sgfx::ComputeShaderHandle Application::loadCS(const char* path)
     }
 
     return sgfx::ComputeShaderHandle::invalidHandle();
+}
+
+sgfx::VertexFormatHandle Application::loadVF(sgfx::VertexElementDescriptor* vfElements, size_t vfElementsSize, const char* shaderPath)
+{
+    void* bytecode      = nullptr;
+    size_t bytecodeSize = 0;
+
+    sgfx::VertexFormatHandle ret = sgfx::VertexFormatHandle::invalidHandle();
+
+    if (loadShader(shaderPath, sgfx::ShaderCompileTarget::VS, bytecode, bytecodeSize)) {
+        ret = sgfx::createVertexFormat(
+            vfElements, vfElementsSize,
+            bytecode, bytecodeSize,
+            Application::genericErrorReporter
+        );
+        delete [] bytecode;
+    }
+
+    return ret;
 }
 

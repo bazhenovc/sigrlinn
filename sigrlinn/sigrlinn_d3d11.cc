@@ -5,7 +5,6 @@
 #include <d3d11.h>
 #include <d3dcompiler.h>
 #include <memory>
-#include <algorithm>
 
 #include <stdlib.h>
 
@@ -139,6 +138,13 @@ static D3D11_STENCIL_OP MapStencilOp[StencilOp::Count] = {
 };
 static_assert((sizeof(MapStencilOp) / sizeof(D3D11_STENCIL_OP)) == static_cast<size_t>(StencilOp::Count), "Mapping is broken!");
 
+static D3D11_INPUT_CLASSIFICATION MapVertexElementType[VertexElementType::Count] = {
+    D3D11_INPUT_PER_VERTEX_DATA,
+    D3D11_INPUT_PER_INSTANCE_DATA
+};
+static_assert((sizeof(MapVertexElementType) / sizeof(D3D11_INPUT_CLASSIFICATION)) == static_cast<size_t>(VertexElementType::Count), "Mapping is broken!");
+
+
 //=============================================================================
 
 ID3D11Device*         g_pd3dDevice         = nullptr;
@@ -146,160 +152,35 @@ ID3D11DeviceContext*  g_pImmediateContext  = nullptr;
 IDXGISwapChain*       g_pSwapChain         = nullptr;
 
 //=============================================================================
-
-struct DXLogicalMeshBuffer final
-{
-    uint8_t* data             = nullptr;
-    size_t   dataSize         = 0;
-    size_t   dataFormatStride = 0;
-    size_t   physicalAddress  = 0;
-
-    BufferType type;
-};
-
-struct DXPhysicalMeshBuffer final
-{
-    ID3D11Buffer*             physicalBuffer     = nullptr;
-    ID3D11ShaderResourceView* physicalBufferView = nullptr;
-    size_t                    physicalDataSize   = 0;
-    bool                      isDirty            = false;
-
-    typedef internal::DynamicArray<DXLogicalMeshBuffer*, 128, 128> PageArray;
-    PageArray allPages;
-
-    DXPhysicalMeshBuffer() = default;
-    inline ~DXPhysicalMeshBuffer()
-    {
-        if (physicalBuffer != nullptr)     physicalBuffer->Release();
-        if (physicalBufferView != nullptr) physicalBufferView->Release();
-    }
-
-    // both allocate() and release() do rebuildPages()
-    inline void allocate(DXLogicalMeshBuffer* logicalBuffer)
-    {
-        allPages.Add(logicalBuffer);
-        isDirty = true;
-    }
-
-    inline void release(DXLogicalMeshBuffer* logicalBuffer)
-    {
-        allPages.Remove(logicalBuffer);
-        isDirty = true;
-    }
-
-    inline void rebuildPages() // very expensive operation
-    {
-        if (!isDirty) return;
-
-        size_t vfStride = allPages[0]->dataFormatStride; // TODO: right now will not work with different strides
-
-        physicalDataSize = 0;
-        for (DXLogicalMeshBuffer* logicalBuffer: allPages) // calculate total size
-            physicalDataSize += logicalBuffer->dataSize;   // TODO: find a better place for this
-
-        //if (physicalDataSize >= 128 * 1024)
-        //    ; // TODO: error handling
-
-        size_t numElements = physicalDataSize / vfStride;
-
-        if (physicalBuffer != nullptr)     physicalBuffer->Release();
-        if (physicalBufferView != nullptr) physicalBufferView->Release();
-
-        D3D11_BUFFER_DESC bufferDesc;
-        bufferDesc.BindFlags           = D3D11_BIND_SHADER_RESOURCE;
-        bufferDesc.ByteWidth           = physicalDataSize;
-        bufferDesc.Usage               = D3D11_USAGE_DYNAMIC;
-        bufferDesc.MiscFlags           = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
-        bufferDesc.StructureByteStride = vfStride;
-        bufferDesc.CPUAccessFlags      = D3D11_CPU_ACCESS_WRITE;
-
-        if (FAILED(g_pd3dDevice->CreateBuffer(&bufferDesc, nullptr, &physicalBuffer))) {
-            // TODO: error handling
-            return;
-        }
-
-        D3D11_SHADER_RESOURCE_VIEW_DESC viewDesc;
-        std::memset(&viewDesc, 0, sizeof(viewDesc));
-
-        viewDesc.Format              = DXGI_FORMAT_UNKNOWN;
-        viewDesc.ViewDimension       = D3D11_SRV_DIMENSION_BUFFER;
-        viewDesc.Buffer.ElementWidth = numElements;
-
-        if (FAILED(g_pd3dDevice->CreateShaderResourceView(physicalBuffer, &viewDesc, &physicalBufferView))) {
-            // TODO: error handling
-            return;
-        }
-
-        // fill the physical buffer
-        D3D11_MAPPED_SUBRESOURCE mappedData;
-        std::memset(&mappedData, 0, sizeof(mappedData));
-
-        if (FAILED(g_pImmediateContext->Map(physicalBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedData))) {
-            // TODO: error handling
-            return;
-        }
-
-        uint8_t* dataPtr = reinterpret_cast<uint8_t*>(mappedData.pData);
-        size_t pageOffset = 0;
-        for (size_t i = 0; i < allPages.GetSize(); ++i) {
-            DXLogicalMeshBuffer* logicalBuffer = allPages[i];
-            std::memcpy(dataPtr + pageOffset, logicalBuffer->data, logicalBuffer->dataSize);
-            logicalBuffer->physicalAddress = pageOffset / logicalBuffer->dataFormatStride;
-            pageOffset += logicalBuffer->dataSize;
-        }
-
-        g_pImmediateContext->Unmap(physicalBuffer, 0);
-
-        isDirty = false;
-    }
-};
-
 struct DXSharedBuffer final
 {
-    ID3D11Buffer*             dataBuffer     = nullptr;
-    ID3D11ShaderResourceView* dataView       = nullptr;
-    size_t                    dataBufferSize = 0;
+    ID3D11Buffer*              dataBuffer     = nullptr;
+    ID3D11ShaderResourceView*  dataView       = nullptr;
+    ID3D11UnorderedAccessView* dataUAV        = 0;
+    size_t                     dataBufferSize = 0;
 
     DXSharedBuffer() {}
     ~DXSharedBuffer()
     {
         if (dataBuffer != nullptr) dataBuffer->Release();
         if (dataView   != nullptr) dataView->Release();
+        if (dataUAV    != nullptr) dataUAV->Release();
     }
 
-    inline void setImmutable(void* mem, size_t size, size_t stride)
+    inline void createFromDesc(const D3D11_BUFFER_DESC& bufferDesc, const D3D11_SUBRESOURCE_DATA& bufferData)
     {
-        dataBufferSize = size;
-
-        if (dataBuffer != nullptr) dataBuffer->Release();
-        if (dataView   != nullptr) dataView->Release();
-
-        D3D11_BUFFER_DESC bufferDesc;
-        std::memset(&bufferDesc, 0, sizeof(bufferDesc));
-
-        bufferDesc.BindFlags           = D3D11_BIND_SHADER_RESOURCE;
-        bufferDesc.ByteWidth           = dataBufferSize;
-        bufferDesc.Usage               = D3D11_USAGE_IMMUTABLE;
-        bufferDesc.MiscFlags           = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
-        bufferDesc.StructureByteStride = stride;
-        bufferDesc.CPUAccessFlags      = 0;
-
-        D3D11_SUBRESOURCE_DATA bufferData;
-        std::memset(&bufferData, 0, sizeof(bufferData));
-
-        bufferData.pSysMem = mem;
-
-        if (FAILED(g_pd3dDevice->CreateBuffer(&bufferDesc, &bufferData, &dataBuffer))) {
+        if (FAILED(g_pd3dDevice->CreateBuffer(&bufferDesc, (bufferData.pSysMem == nullptr) ? nullptr : &bufferData, &dataBuffer))) {
             // TODO: error handling
             return;
         }
+    }
 
+    inline void createView(size_t numElements)
+    {
         D3D11_SHADER_RESOURCE_VIEW_DESC viewDesc;
-        std::memset(&viewDesc, 0, sizeof(viewDesc));
-
-        viewDesc.Format              = DXGI_FORMAT_UNKNOWN;
         viewDesc.ViewDimension       = D3D11_SRV_DIMENSION_BUFFER;
-        viewDesc.Buffer.ElementWidth = size / stride;
+        viewDesc.Format              = DXGI_FORMAT_UNKNOWN;
+        viewDesc.Buffer.ElementWidth = numElements;
 
         if (FAILED(g_pd3dDevice->CreateShaderResourceView(dataBuffer, &viewDesc, &dataView))) {
             // TODO: error handling
@@ -307,46 +188,19 @@ struct DXSharedBuffer final
         }
     }
 
-    inline void setConstant(size_t newSize, size_t stride, size_t numInstances)
+    inline void createUAV(size_t numElements)
     {
-        if (newSize > dataBufferSize) {
-            dataBufferSize = newSize;
+        D3D11_UNORDERED_ACCESS_VIEW_DESC uavDesc;
+        uavDesc.ViewDimension      = D3D11_UAV_DIMENSION_BUFFER;
+        uavDesc.Format             = DXGI_FORMAT_UNKNOWN;
+        uavDesc.Buffer.NumElements = numElements;
 
-            if (dataBuffer != nullptr) dataBuffer->Release();
-            if (dataView   != nullptr) dataView->Release();
-
-            D3D11_BUFFER_DESC bufferDesc;
-            std::memset(&bufferDesc, 0, sizeof(bufferDesc));
-
-            bufferDesc.BindFlags           = D3D11_BIND_SHADER_RESOURCE;
-            bufferDesc.ByteWidth           = dataBufferSize;
-            bufferDesc.Usage               = D3D11_USAGE_DYNAMIC;
-            bufferDesc.MiscFlags           = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
-            bufferDesc.StructureByteStride = stride;
-            bufferDesc.CPUAccessFlags      = D3D11_CPU_ACCESS_WRITE;
-
-            if (FAILED(g_pd3dDevice->CreateBuffer(&bufferDesc, nullptr, &dataBuffer))) {
-                // TODO: error handling
-                return;
-            }
-
-            D3D11_SHADER_RESOURCE_VIEW_DESC viewDesc;
-            std::memset(&viewDesc, 0, sizeof(viewDesc));
-
-            viewDesc.Format              = DXGI_FORMAT_UNKNOWN;
-            viewDesc.ViewDimension       = D3D11_SRV_DIMENSION_BUFFER;
-            viewDesc.Buffer.ElementWidth = numInstances;
-
-            if (FAILED(g_pd3dDevice->CreateShaderResourceView(dataBuffer, &viewDesc, &dataView))) {
-                // TODO: error handling
-                return;
-            }
+        if (FAILED(g_pd3dDevice->CreateUnorderedAccessView(dataBuffer, &uavDesc, &dataUAV))) {
+            // TODO: error handling
+            return;
         }
     }
 };
-
-DXPhysicalMeshBuffer* g_physicalVertexBuffer = nullptr;
-DXPhysicalMeshBuffer* g_physicalIndexBuffer  = nullptr;
 
 //=============================================================================
 
@@ -367,18 +221,15 @@ struct SurfaceShaderImpl final
 
 struct PipelineStateImpl final
 {
-    ID3D11RasterizerState*   rasterizerState;
-    ID3D11BlendState*        blendState;
-    ID3D11DepthStencilState* depthStencilState;
+    ID3D11RasterizerState*   rasterizerState   = nullptr;
+    ID3D11BlendState*        blendState        = nullptr;
+    ID3D11DepthStencilState* depthStencilState = nullptr;
 
-    SurfaceShaderImpl*       shader;
-    VertexFormatImpl*        vertexFormat;
+    SurfaceShaderImpl*       shader            = nullptr;
+    VertexFormatImpl*        vertexFormat      = nullptr;
 
     // additional stuff passed as parameters
     UINT                     stencilRef;
-
-    // constant buffer
-    DXSharedBuffer           constantBuffer;
 };
 
 static UINT dxFormatStride(DataFormat format)
@@ -416,8 +267,10 @@ static void dxSetPipelineState(PipelineStateHandle handle)
         g_pImmediateContext->OMSetBlendState(impl->blendState, nullptr, 0xffffffff);
         g_pImmediateContext->OMSetDepthStencilState(impl->depthStencilState, impl->stencilRef);
 
-        //g_pImmediateContext->IASetInputLayout(impl->vertexFormat->inputLayout);
-        g_pImmediateContext->IASetInputLayout(nullptr);
+        if (impl->vertexFormat != nullptr)
+            g_pImmediateContext->IASetInputLayout(impl->vertexFormat->inputLayout);
+        else
+            g_pImmediateContext->IASetInputLayout(nullptr);
 
         g_pImmediateContext->VSSetShader(impl->shader->vs, nullptr, 0);
         g_pImmediateContext->HSSetShader(impl->shader->hs, nullptr, 0);
@@ -432,87 +285,42 @@ static void dxProcessDrawQueue(internal::DrawQueue* queue)
     PipelineStateImpl* psimpl = static_cast<PipelineStateImpl*>(queue->getState().value);
 
     dxSetPipelineState(queue->getState());
-    g_pImmediateContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-    g_physicalVertexBuffer->rebuildPages(); // TODO: move somewhere else
-    g_physicalIndexBuffer->rebuildPages(); // TODO: move somewhere else
+    for (const internal::DrawCall& call: queue->getDrawCalls()) {
+        DXSharedBuffer* vertexBuffer = static_cast<DXSharedBuffer*>(call.vertexBuffer.value);
+        DXSharedBuffer* indexBuffer  = static_cast<DXSharedBuffer*>(call.indexBuffer.value);
+        UINT            offset       = 0;
 
-//#define DC_CHECK_PROCESSED
-#ifdef DC_CHECK_PROCESSED
-    size_t _checkProcessedCalls = 0;
-#endif
-
-    size_t numInstances = queue->getDrawCalls().GetSize();
-
-    // process draw calls
-    psimpl->constantBuffer.setConstant(
-        internal::DrawCall::ConstantBufferSize * numInstances,
-        internal::DrawCall::ConstantBufferSize,
-        numInstances
-    );
-
-    // update constants
-    {
-        D3D11_MAPPED_SUBRESOURCE mappedData;
-        if (FAILED(g_pImmediateContext->Map(psimpl->constantBuffer.dataBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedData))) {
-            // TODO: error handling
-            return;
+        g_pImmediateContext->IASetPrimitiveTopology(MapPrimitiveTopology[static_cast<uint64_t>(call.primitiveTopology)]);
+        if (psimpl->vertexFormat != nullptr) {
+            g_pImmediateContext->IASetVertexBuffers(0, 1, &vertexBuffer->dataBuffer, &psimpl->vertexFormat->stride, &offset);
+            g_pImmediateContext->IASetIndexBuffer(indexBuffer->dataBuffer, DXGI_FORMAT_R32_UINT, 0);
         }
-        uint8_t* dataPtr = reinterpret_cast<uint8_t*>(mappedData.pData);
-        for (size_t i = 0; i < numInstances; ++i) {
-            size_t offset = i * internal::DrawCall::ConstantBufferSize;
-            const internal::DrawCall& call = queue->getDrawCalls()[i];
 
-            std::memcpy(dataPtr + offset, call.constantBufferData, internal::DrawCall::ConstantBufferSize);
+        // constant buffers are ID3D11Buffers effectively
+        ID3D11Buffer* constantBuffers[internal::DrawCall::kMaxConstantBuffers] = { nullptr };
+        for (size_t i = 0; i < internal::DrawCall::kMaxConstantBuffers; ++i)
+            constantBuffers[i] = static_cast<ID3D11Buffer*>(call.constantBuffers[i].value);
 
-            // fill internal data structure
-            struct InternalData
-            {
-                uint32_t vb;
-                uint32_t ib;
-                uint32_t drawCallType;
-                uint32_t reserved;
-            };
+        g_pImmediateContext->VSSetConstantBuffers(0, internal::DrawCall::kMaxConstantBuffers, constantBuffers);
+        g_pImmediateContext->HSSetConstantBuffers(0, internal::DrawCall::kMaxConstantBuffers, constantBuffers);
+        g_pImmediateContext->DSSetConstantBuffers(0, internal::DrawCall::kMaxConstantBuffers, constantBuffers);
+        g_pImmediateContext->GSSetConstantBuffers(0, internal::DrawCall::kMaxConstantBuffers, constantBuffers);
+        g_pImmediateContext->PSSetConstantBuffers(0, internal::DrawCall::kMaxConstantBuffers, constantBuffers);
 
-            InternalData* idata = reinterpret_cast<InternalData*>(dataPtr + offset);
-
-            DXLogicalMeshBuffer* vertexBuffer = static_cast<DXLogicalMeshBuffer*>(call.vertexBuffer.value);
-            if (vertexBuffer != nullptr)
-                idata->vb = vertexBuffer->physicalAddress;
-
-            DXLogicalMeshBuffer* indexBuffer = static_cast<DXLogicalMeshBuffer*>(call.indexBuffer.value);
-            if (indexBuffer != nullptr)
-                idata->ib = indexBuffer->physicalAddress;
-
-            idata->drawCallType = call.type;
-        }
-        g_pImmediateContext->Unmap(psimpl->constantBuffer.dataBuffer, 0);
+        if (call.type == internal::DrawCall::Draw)
+            g_pImmediateContext->Draw(call.count, call.startVertex);
+        else if (call.type == internal::DrawCall::DrawIndexed)
+            g_pImmediateContext->DrawIndexed(call.count, call.startIndex, call.startVertex);
     }
-
-    const internal::DrawCall& call = queue->getDrawCalls()[0]; // TODO: get rid of this somehow
-
-    ID3D11ShaderResourceView* vbibViews[2] = {
-        g_physicalVertexBuffer->physicalBufferView,
-        g_physicalIndexBuffer->physicalBufferView
-    };
-
-    g_pImmediateContext->VSSetShaderResources(0, 2, vbibViews);
-
-    g_pImmediateContext->VSSetShaderResources(0 + 2, 1, &psimpl->constantBuffer.dataView);
-    g_pImmediateContext->HSSetShaderResources(0 + 2, 1, &psimpl->constantBuffer.dataView);
-    g_pImmediateContext->DSSetShaderResources(0 + 2, 1, &psimpl->constantBuffer.dataView);
-    g_pImmediateContext->GSSetShaderResources(0 + 2, 1, &psimpl->constantBuffer.dataView);
-    g_pImmediateContext->PSSetShaderResources(0 + 2, 1, &psimpl->constantBuffer.dataView);
-
-    g_pImmediateContext->DrawInstanced(call.count, numInstances, 0, 0);
-
-#ifdef DC_CHECK_PROCESSED
-    if (_checkProcessedCalls != queue->getDrawCalls().GetSize())
-        OutputDebugString("Not all draw calls were processed!\n");
-#endif
 }
 
 //=============================================================================
+
+static void reportError(const char* msg)
+{
+    OutputDebugString(msg);
+}
 
 bool initD3D11(void* d3dDevice, void* d3dContext, void* d3dSwapChain)
 {
@@ -520,17 +328,11 @@ bool initD3D11(void* d3dDevice, void* d3dContext, void* d3dSwapChain)
     g_pImmediateContext = static_cast<ID3D11DeviceContext*>(d3dContext);
     g_pSwapChain        = static_cast<IDXGISwapChain*>(d3dSwapChain);
 
-    g_physicalVertexBuffer = new DXPhysicalMeshBuffer;
-    g_physicalIndexBuffer  = new DXPhysicalMeshBuffer;
-
     return true;
 }
 
 void shutdown()
-{
-    delete g_physicalVertexBuffer;
-    delete g_physicalIndexBuffer;
-}
+{}
 
 // shader compiling
 
@@ -764,6 +566,63 @@ void dispatchComputeShader(ComputeShaderHandle handle, uint32_t x, uint32_t y, u
     }
 }
 
+VertexFormatHandle createVertexFormat(
+    VertexElementDescriptor* elements,
+    size_t size,
+    void* shaderBytecode, size_t shaderBytecodeSize,
+    ErrorReportFunc errorReport
+)
+{
+    if (elements == nullptr || size == 0)
+        return VertexFormatHandle::invalidHandle();
+
+    size_t totalSize = size * sizeof(D3D11_INPUT_ELEMENT_DESC);
+    D3D11_INPUT_ELEMENT_DESC* inputData = reinterpret_cast<D3D11_INPUT_ELEMENT_DESC*>(alloca(totalSize));
+    std::memset(inputData, 0, totalSize);
+
+    UINT stride = 0;
+
+    for (size_t i = 0; i < size; ++i) {
+        inputData[i].SemanticName      = elements[i].semanticName;
+        inputData[i].SemanticIndex     = elements[i].semanticIndex;
+        inputData[i].Format            = MapDataFormat[static_cast<uint64_t>(elements[i].format)];
+        inputData[i].InputSlot         = elements[i].slot;
+        inputData[i].AlignedByteOffset = static_cast<UINT>(elements[i].offset);
+        inputData[i].InputSlotClass    = MapVertexElementType[static_cast<uint64_t>(elements[i].type)];
+        if (elements[i].type == VertexElementType::PerVertex)
+            inputData[i].InstanceDataStepRate = 0;
+        else
+            inputData[i].InstanceDataStepRate = 1;
+
+        stride += dxFormatStride(elements[i].format);
+    }
+
+    // validate first
+    if (FAILED(g_pd3dDevice->CreateInputLayout(inputData, size, shaderBytecode, shaderBytecodeSize, nullptr))) {
+        if (errorReport != nullptr) errorReport("Warning: VertexFormat validation failed!");
+    }
+
+    ID3D11InputLayout* layout = nullptr;
+    if (FAILED(g_pd3dDevice->CreateInputLayout(inputData, size, shaderBytecode, shaderBytecodeSize, &layout))) {
+        if (errorReport != nullptr) errorReport("Failed to create vertex format!");
+        return VertexFormatHandle::invalidHandle();
+    }
+
+    VertexFormatImpl* impl = new VertexFormatImpl;
+    impl->inputLayout = layout;
+    impl->stride      = stride;
+    return VertexFormatHandle(impl);
+}
+
+void releaseVertexFormat(VertexFormatHandle handle)
+{
+    if (handle != VertexFormatHandle::invalidHandle()) {
+        VertexFormatImpl* impl = static_cast<VertexFormatImpl*>(handle.value);
+        impl->inputLayout->Release();
+        delete impl;
+    }
+}
+
 PipelineStateHandle createPipelineState(const PipelineStateDescriptor& desc)
 {
     const RasterizerState& rsState = desc.rasterizerState;
@@ -853,6 +712,7 @@ PipelineStateHandle createPipelineState(const PipelineStateDescriptor& desc)
     impl->depthStencilState = depthStencilState;
 
     impl->shader       = static_cast<SurfaceShaderImpl*>(desc.shader.value);
+    impl->vertexFormat = static_cast<VertexFormatImpl*>(desc.vertexFormat.value);
 
     impl->stencilRef = dsState.stencilRef;
 
@@ -870,56 +730,85 @@ void releasePipelineState(PipelineStateHandle handle)
     }
 }
 
-BufferHandle createBuffer(BufferType type, void* mem, size_t size, size_t stride)
+BufferHandle createBuffer(uint32_t flags, void* mem, size_t size, size_t stride)
 {
-    DXLogicalMeshBuffer* logicalBuffer = new DXLogicalMeshBuffer;
-    logicalBuffer->data                = new uint8_t[size];
-    logicalBuffer->dataSize            = size;
-    logicalBuffer->dataFormatStride    = stride;
-    logicalBuffer->type                = type;
+    DXSharedBuffer* buffer = new DXSharedBuffer;
 
-    std::memcpy(logicalBuffer->data, mem, size);
+    D3D11_USAGE bufferUsage    = D3D11_USAGE_IMMUTABLE;
+    UINT        bufferCPUFlags = 0;
+    UINT        bufferBindFlag = 0;
+    UINT        bufferMiscFlag = 0;
 
-    switch (type) {
-    case BufferType::Vertex: { g_physicalVertexBuffer->allocate(logicalBuffer); } break;
-    case BufferType::Index:  { g_physicalIndexBuffer->allocate(logicalBuffer);  } break;
-    };
+    bool isStructured = false;
+    bool isUAV        = false;
 
-    return BufferHandle(logicalBuffer);
+    if (flags & BufferFlags::VertexBuffer) {
+        bufferBindFlag = D3D11_BIND_VERTEX_BUFFER;
+    }
+    if (flags & BufferFlags::IndexBuffer) {
+        bufferBindFlag = D3D11_BIND_INDEX_BUFFER;
+    }
+
+    if (flags & BufferFlags::StructuredBuffer) {
+        bufferBindFlag  = D3D11_BIND_SHADER_RESOURCE;
+        bufferMiscFlag |= D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+        isStructured    = true;
+    }
+
+    if (flags & BufferFlags::GPUWrite) {
+        bufferUsage     = D3D11_USAGE_DEFAULT;
+        bufferMiscFlag |= D3D11_BIND_UNORDERED_ACCESS;
+        isUAV           = true;
+    }
+    if (flags & BufferFlags::CPURead) {
+        bufferUsage     = D3D11_USAGE_DYNAMIC;
+        bufferCPUFlags |= D3D11_CPU_ACCESS_READ;
+    }
+    if (flags & BufferFlags::CPUWrite) {
+        bufferUsage     = D3D11_USAGE_DYNAMIC;
+        bufferCPUFlags |= D3D11_CPU_ACCESS_WRITE;
+    }
+
+    D3D11_BUFFER_DESC bufferDesc;
+    std::memset(&bufferDesc, 0, sizeof(bufferDesc));
+
+    bufferDesc.ByteWidth           = size;
+    bufferDesc.Usage               = bufferUsage;
+    bufferDesc.BindFlags           = bufferBindFlag;
+    bufferDesc.CPUAccessFlags      = bufferCPUFlags;
+    bufferDesc.MiscFlags           = bufferMiscFlag;
+    bufferDesc.StructureByteStride = stride;
+
+    D3D11_SUBRESOURCE_DATA bufferData;
+    std::memset(&bufferData, 0, sizeof(bufferData));
+    bufferData.pSysMem = mem;
+
+    buffer->createFromDesc(bufferDesc, bufferData);
+
+    if (isStructured) buffer->createView(size / stride);
+    if (isUAV)        buffer->createUAV(size / stride);
+
+    return BufferHandle(buffer);
 }
 
 void releaseBuffer(BufferHandle handle)
 {
     if (handle != BufferHandle::invalidHandle()) {
-        DXLogicalMeshBuffer* logicalBuffer = static_cast<DXLogicalMeshBuffer*>(handle.value);
-
-        switch (logicalBuffer->type) {
-        case BufferType::Vertex: { g_physicalVertexBuffer->release(logicalBuffer); } break;
-        case BufferType::Index:  { g_physicalIndexBuffer->release(logicalBuffer);  } break;
-        };
-
-        delete [] logicalBuffer->data;
-        delete logicalBuffer;
+        DXSharedBuffer* buffer = static_cast<DXSharedBuffer*>(handle.value);
+        delete buffer;
     }
 }
-#if 0
-TransientBufferHandle createTransientBuffer(TransientBufferType type, void* mem, size_t size)
-{
-    UINT bindFlags = 0;
-    switch (type) {
-    case TransientBufferType::Vertex:   { bindFlags = D3D11_BIND_VERTEX_BUFFER;    } break;
-    case TransientBufferType::Index:    { bindFlags = D3D11_BIND_INDEX_BUFFER;     } break;
-    case TransientBufferType::Constant: { bindFlags = D3D11_BIND_CONSTANT_BUFFER;  } break;
-    case TransientBufferType::Storage:  { bindFlags = D3D11_BIND_UNORDERED_ACCESS; } break;
-    }
 
-    D3D11_BUFFER_DESC desc;
-    desc.ByteWidth           = size;
-    desc.Usage               = D3D11_USAGE_DEFAULT;
-    desc.BindFlags           = bindFlags;
-    desc.CPUAccessFlags      = 0;
-    desc.MiscFlags           = 0;
-    desc.StructureByteStride = 0;
+ConstantBufferHandle createConstantBuffer(void* mem, size_t size)
+{
+    D3D11_BUFFER_DESC bufferDesc;
+    std::memset(&bufferDesc, 0, sizeof(bufferDesc));
+    bufferDesc.ByteWidth           = size;
+    bufferDesc.Usage               = D3D11_USAGE_DEFAULT;
+    bufferDesc.BindFlags           = D3D11_BIND_CONSTANT_BUFFER;
+    bufferDesc.CPUAccessFlags      = 0;
+    bufferDesc.MiscFlags           = 0;
+    bufferDesc.StructureByteStride = size;
 
     D3D11_SUBRESOURCE_DATA data;
     data.pSysMem          = mem;
@@ -927,35 +816,31 @@ TransientBufferHandle createTransientBuffer(TransientBufferType type, void* mem,
     data.SysMemSlicePitch = 0;
 
     ID3D11Buffer* buffer = nullptr;
-    if (FAILED(g_pd3dDevice->CreateBuffer(&desc, mem == nullptr ? nullptr : &data, &buffer))) {
-        return BufferHandle::invalidHandle();
+    if (FAILED(g_pd3dDevice->CreateBuffer(&bufferDesc, (mem == nullptr) ? nullptr : &data, &buffer))) {
+        // TODO: error handling
+        return ConstantBufferHandle::invalidHandle();
     }
 
-    return BufferHandle(buffer);
+    return ConstantBufferHandle(buffer);
 }
 
-void updateTransientBuffer(TransientBufferHandle handle, void* mem, size_t size, size_t offset)
+void updateConstantBuffer(ConstantBufferHandle handle, void* mem)
 {
-    if (handle != TransientBufferHandle::invalidHandle()) {
+    if (handle != ConstantBufferHandle::invalidHandle()) {
         ID3D11Buffer* buffer = static_cast<ID3D11Buffer*>(handle.value);
 
-        D3D11_BOX box; // a box? wtf?
-        box.left   = offset;
-        box.right  = offset + size;
-        box.top    = 0;
-        box.bottom = 1;
-        box.front  = 0;
-        box.back   = 1;
-
-        g_pImmediateContext->UpdateSubresource(
-            buffer, 0,
-            offset == 0 ? nullptr : &box,
-            mem,
-            0, 0
-        );
+        g_pImmediateContext->UpdateSubresource(buffer, 0, nullptr, mem, 0, 0);
     }
 }
-#endif
+
+void releaseConstantBuffer(ConstantBufferHandle handle)
+{
+    if (handle != ConstantBufferHandle::invalidHandle()) {
+        ID3D11Buffer* buffer = static_cast<ID3D11Buffer*>(handle.value);
+        buffer->Release();
+    }
+}
+
 DrawQueueHandle createDrawQueue(PipelineStateHandle state)
 {
     internal::DrawQueue* queue = new internal::DrawQueue(state);
@@ -994,11 +879,27 @@ void setIndexBuffer(DrawQueueHandle handle, BufferHandle ib)
     }
 }
 
-void setConstants(DrawQueueHandle handle, uint32_t idx, void* constantsData, size_t constantsSize)
+void setConstantBuffer(DrawQueueHandle handle, uint32_t idx, ConstantBufferHandle buffer)
 {
     if (handle != DrawQueueHandle::invalidHandle()) {
         internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
-        queue->setConstants(idx, constantsData, constantsSize);
+        queue->setConstantBuffer(idx, buffer);
+    }
+}
+
+void setResource(DrawQueueHandle handle, uint32_t idx, BufferHandle resource)
+{
+    if (handle != DrawQueueHandle::invalidHandle()) {
+        internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
+        queue->setResource(idx, resource);
+    }
+}
+
+void setResourceRW(DrawQueueHandle handle, uint32_t idx, BufferHandle resource)
+{
+    if (handle != DrawQueueHandle::invalidHandle()) {
+        internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
+        queue->setResourceRW(idx, resource);
     }
 }
 

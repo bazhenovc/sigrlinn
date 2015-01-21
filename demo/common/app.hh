@@ -32,11 +32,15 @@ protected:
     uint32_t width = 1024;
     uint32_t height = 768;
 
+    static void genericErrorReporter(const char* msg);
+
     bool loadShader(const char* path, sgfx::ShaderCompileTarget target, void*& outData, size_t& outSize);
     sgfx::VertexShaderHandle   loadVS(const char* path);
     sgfx::GeometryShaderHandle loadGS(const char* path);
     sgfx::PixelShaderHandle    loadPS(const char* path);
     sgfx::ComputeShaderHandle  loadCS(const char* path);
+
+    sgfx::VertexFormatHandle   loadVF(sgfx::VertexElementDescriptor* vfElements, size_t vfElementsSize, const char* shaderPath);
 
 public:
 

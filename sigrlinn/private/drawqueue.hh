@@ -22,32 +22,22 @@ struct DrawCall final
 
     enum
     {
-        MaxConstantBuffers = 4,
-        ConstantBufferSize = 2048 // TODO: remove hardcode
+        kMaxConstantBuffers = 8,
+        kMaxShaderResources = 128
     };
 
-    enum
-    {
-        MaxTextures = 8
-    };
+    ConstantBufferHandle constantBuffers[kMaxConstantBuffers];
+    BufferHandle         shaderResources[kMaxShaderResources];
+    BufferHandle         rwShaderResources[kMaxShaderResources];
 
-    uint8_t constantBufferData[MaxConstantBuffers * ConstantBufferSize];
-    uint8_t usedConstantBuffers; // mask, each set bit identifies a used constant buffer
-
-    size_t stride;
-    size_t offset;
-
-    BufferHandle          vertexBuffer;
-    BufferHandle          indexBuffer;
-    uint32_t              textures[MaxTextures];
-    PrimitiveTopology     primitiveTopology;
+    BufferHandle      vertexBuffer;
+    BufferHandle      indexBuffer;
+    PrimitiveTopology primitiveTopology;
 
     uint32_t count;
     uint32_t startVertex;
     uint32_t startIndex;
     Type     type;
-
-    inline bool isValid() const { return vertexBuffer.value != nullptr && indexBuffer.value != nullptr; }
 };
 
 class DrawQueue final
@@ -77,14 +67,19 @@ public:
     inline void setVertexBuffer(BufferHandle handle)                 { currentDrawCall.vertexBuffer = handle; }
     inline void setIndexBuffer(BufferHandle handle)                  { currentDrawCall.indexBuffer  = handle; }
 
-    inline void setConstants(uint32_t idx, void* constantsData, size_t constantsSize)
+    inline void setConstantBuffer(uint32_t idx, ConstantBufferHandle resource)
     {
-        std::memcpy(
-            &currentDrawCall.constantBufferData[idx * DrawCall::ConstantBufferSize],
-            constantsData,
-            constantsSize
-        );
-        currentDrawCall.usedConstantBuffers |= (1 << idx);
+        currentDrawCall.constantBuffers[idx] = resource;
+    }
+
+    inline void setResource(uint32_t idx, BufferHandle resource)
+    {
+        currentDrawCall.shaderResources[idx] = resource;
+    }
+
+    inline void setResourceRW(uint32_t idx, BufferHandle resource)
+    {
+        currentDrawCall.rwShaderResources[idx] = resource;
     }
 
     inline void draw(uint32_t count, uint32_t startVertex)
@@ -93,7 +88,7 @@ public:
         currentDrawCall.startVertex = startVertex;
         currentDrawCall.startIndex  = 0;
         currentDrawCall.type        = DrawCall::Draw;
-        if (currentDrawCall.isValid()) drawCalls.Add(currentDrawCall);
+        drawCalls.Add(currentDrawCall);
         std::memset(&currentDrawCall, 0, sizeof(currentDrawCall));
     }
 
@@ -103,7 +98,7 @@ public:
         currentDrawCall.startVertex = startVertex;
         currentDrawCall.startIndex  = startIndex;
         currentDrawCall.type        = DrawCall::DrawIndexed;
-        if (currentDrawCall.isValid()) drawCalls.Add(currentDrawCall);
+        drawCalls.Add(currentDrawCall);
         std::memset(&currentDrawCall, 0, sizeof(currentDrawCall));
     }
 };
