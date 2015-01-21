@@ -841,6 +841,111 @@ void releaseConstantBuffer(ConstantBufferHandle handle)
     }
 }
 
+Texture1DHandle createTexture1D(uint32_t width, DataFormat format, size_t numMipmaps)
+{
+    D3D11_TEXTURE1D_DESC textureDesc;
+    std::memset(&textureDesc, 0, sizeof(textureDesc));
+
+    textureDesc.Width          = width;
+    textureDesc.MipLevels      = numMipmaps;
+    textureDesc.ArraySize      = 1;
+    textureDesc.Format         = MapDataFormat[static_cast<uint32_t>(format)];
+    textureDesc.Usage          = D3D11_USAGE_DEFAULT;
+    textureDesc.BindFlags      = D3D11_BIND_SHADER_RESOURCE;
+    textureDesc.CPUAccessFlags = 0;
+    textureDesc.MiscFlags      = 0;
+
+    ID3D11Texture1D* texture = nullptr;
+    if (FAILED(g_pd3dDevice->CreateTexture1D(&textureDesc, nullptr, &texture))) {
+        // TODO: error handling
+        return Texture1DHandle::invalidHandle();
+    }
+
+    return Texture1DHandle(texture);
+}
+
+Texture2DHandle createTexture2D(uint32_t width, uint32_t height, DataFormat format, size_t numMipmaps)
+{
+    D3D11_TEXTURE2D_DESC textureDesc;
+    std::memset(&textureDesc, 0, sizeof(textureDesc));
+
+    textureDesc.Width          = width;
+    textureDesc.Height         = height;
+    textureDesc.MipLevels      = numMipmaps;
+    textureDesc.ArraySize      = 1;
+    textureDesc.Format         = MapDataFormat[static_cast<uint32_t>(format)];
+    textureDesc.Usage          = D3D11_USAGE_DEFAULT;
+    textureDesc.BindFlags      = D3D11_BIND_SHADER_RESOURCE;
+    textureDesc.CPUAccessFlags = 0;
+    textureDesc.MiscFlags      = 0;
+
+    textureDesc.SampleDesc.Count   = 1;
+    textureDesc.SampleDesc.Quality = 0;
+
+    ID3D11Texture2D* texture = nullptr;
+    if (FAILED(g_pd3dDevice->CreateTexture2D(&textureDesc, nullptr, &texture))) {
+        // TODO: error handling
+        return Texture2DHandle::invalidHandle();
+    }
+
+    return Texture2DHandle(texture);
+}
+
+Texture3DHandle createTexture3D(uint32_t width, uint32_t height, uint32_t depth, DataFormat format, size_t numMipmaps)
+{
+    D3D11_TEXTURE3D_DESC textureDesc;
+    std::memset(&textureDesc, 0, sizeof(textureDesc));
+
+    textureDesc.Width          = width;
+    textureDesc.Height         = height;
+    textureDesc.Depth          = depth;
+    textureDesc.MipLevels      = numMipmaps;
+    textureDesc.Format         = MapDataFormat[static_cast<uint32_t>(format)];
+    textureDesc.Usage          = D3D11_USAGE_DEFAULT;
+    textureDesc.BindFlags      = D3D11_BIND_SHADER_RESOURCE;
+    textureDesc.CPUAccessFlags = 0;
+    textureDesc.MiscFlags      = 0;
+
+    ID3D11Texture3D* texture = nullptr;
+    if (FAILED(g_pd3dDevice->CreateTexture3D(&textureDesc, nullptr, &texture))) {
+        // TODO: error handling
+        return Texture3DHandle::invalidHandle();
+    }
+
+    return Texture3DHandle(texture);
+}
+
+void updateTexture(
+    TextureHandle handle, void* mem,
+    uint32_t mip,
+    size_t offsetX, size_t sizeX,
+    size_t offsetY, size_t sizeY,
+    size_t offsetZ, size_t sizeZ
+)
+{
+    if (handle != TextureHandle::invalidHandle()) {
+        ID3D11Resource* resource = static_cast<ID3D11Resource*>(handle.value);
+
+        D3D11_BOX box;
+        box.left   = offsetX;
+        box.right  = offsetX + sizeX;
+        box.top    = offsetY;
+        box.bottom = offsetY + sizeY;
+        box.front  = offsetZ;
+        box.back   = offsetZ + sizeZ;
+
+        g_pImmediateContext->UpdateSubresource(resource, mip, &box, mem, sizeY, sizeZ);
+    }
+}
+
+void releaseTexture(TextureHandle handle)
+{
+    if (handle != TextureHandle::invalidHandle()) {
+        ID3D11Resource* resource = static_cast<ID3D11Resource*>(handle.value);
+        resource->Release();
+    }
+}
+
 DrawQueueHandle createDrawQueue(PipelineStateHandle state)
 {
     internal::DrawQueue* queue = new internal::DrawQueue(state);

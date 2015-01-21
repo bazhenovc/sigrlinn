@@ -442,7 +442,15 @@ void                  releaseConstantBuffer(ConstantBufferHandle handle);
 Texture1DHandle createTexture1D(uint32_t width, DataFormat format, size_t numMipmaps);
 Texture2DHandle createTexture2D(uint32_t width, uint32_t height, DataFormat format, size_t numMipmaps);
 Texture3DHandle createTexture3D(uint32_t width, uint32_t height, uint32_t depth, DataFormat format, size_t numMipmaps);
-CubemapHandle   createCubemap(uint32_t sideWidth, uint32_t sideHeight, DataFormat format, size_t numMipmaps);
+
+void            updateTexture(
+    TextureHandle handle, void* mem,
+    uint32_t mip,
+    size_t offsetX, size_t sizeX,
+    size_t offsetY, size_t sizeY,
+    size_t offsetZ, size_t sizeZ
+);
+void            releaseTexture(TextureHandle handle);
 
 // drawing
 DrawQueueHandle createDrawQueue(PipelineStateHandle state);
@@ -454,6 +462,7 @@ void            setIndexBuffer(DrawQueueHandle dq, BufferHandle ib);
 
 void            setConstantBuffer(DrawQueueHandle handle, uint32_t idx, ConstantBufferHandle buffer);
 void            setResource(DrawQueueHandle handle, uint32_t idx, BufferHandle resource);
+void            setResource(DrawQueueHandle handle, uint32_t idx, TextureHandle resource);
 void            setResourceRW(DrawQueueHandle handle, uint32_t idx, BufferHandle resource);
 
 void            draw(DrawQueueHandle dq, uint32_t count, uint32_t startVertex);
