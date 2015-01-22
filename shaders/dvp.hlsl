@@ -5,6 +5,9 @@ struct VertexData
     float2 texcoord0;
     float2 texcoord1;
     float3 normal;
+    uint   boneIDs;
+    float4 boneWeights;
+    uint   vertexColor;
 };
 StructuredBuffer<VertexData> g_VertexBuffer;
 StructuredBuffer<uint>       g_IndexBuffer;
@@ -16,11 +19,7 @@ struct ConstantData
 {
     uint4    internalData;
 
-    float4x4 World;
-    float4x4 View;
-    float4x4 Projection;
-
-    float4   strideOffset[(2048 - 200) / 16];
+    row_major matrix mvp;
 };
 StructuredBuffer<ConstantData> g_ConstantBuffer;
 
@@ -44,9 +43,11 @@ VS_OUTPUT vs_main(VS_INPUT input)
     uint instanceID = input.instanceID;
     uint vertexID   = input.vertexID;
 
-    uint vbID     = g_ConstantBuffer[instanceID].internalData[0];
-    uint ibID     = g_ConstantBuffer[instanceID].internalData[1];
-    uint drawType = g_ConstantBuffer[instanceID].internalData[2];
+    ConstantData cdata = g_ConstantBuffer[instanceID];
+
+    uint vbID     = cdata.internalData[0];
+    uint ibID     = cdata.internalData[1];
+    uint drawType = cdata.internalData[2];
     
     VertexData vdata;
     [branch] if (drawType == DRAW_INDEXED) vdata = g_VertexBuffer[vbID + g_IndexBuffer[ibID + vertexID]];
@@ -55,13 +56,11 @@ VS_OUTPUT vs_main(VS_INPUT input)
     float4 v_position = float4(vdata.position, 1.0);
 
     VS_OUTPUT output = (VS_OUTPUT)0;
-    output.position = mul(v_position,      g_ConstantBuffer[instanceID].World);
-    output.position = mul(output.position, g_ConstantBuffer[instanceID].View);
-    output.position = mul(output.position, g_ConstantBuffer[instanceID].Projection);
+    output.position = mul(v_position, cdata.mvp);
 
     output.texcoord0 = vdata.texcoord0;
     output.texcoord1 = vdata.texcoord1;
-    output.normal    = mul(vdata.normal,   g_ConstantBuffer[instanceID].World);
+    output.normal    = vdata.normal;//mul(vdata.normal,   g_ConstantBuffer[instanceID].World);
 
     return output;
 }

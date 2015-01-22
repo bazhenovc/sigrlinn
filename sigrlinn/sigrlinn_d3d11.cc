@@ -14,6 +14,12 @@
 namespace sgfx
 {
 
+static D3D11_MAP MapMapType[MapType::Count] = {
+    D3D11_MAP_READ,
+    D3D11_MAP_WRITE_DISCARD
+};
+static_assert((sizeof(MapMapType) / sizeof(D3D11_MAP)) == static_cast<uint32_t>(MapType::Count), "Mapping is broken!");
+
 static D3D11_PRIMITIVE_TOPOLOGY MapPrimitiveTopology[PrimitiveTopology::Count] = {
     D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
     D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP
@@ -78,7 +84,8 @@ static_assert((sizeof(MapFillMode) / sizeof(D3D11_FILL_MODE)) == static_cast<siz
 
 static D3D11_CULL_MODE MapCullMode[CullMode::Count] = {
     D3D11_CULL_BACK,
-    D3D11_CULL_FRONT
+    D3D11_CULL_FRONT,
+    D3D11_CULL_NONE
 };
 static_assert((sizeof(MapCullMode) / sizeof(D3D11_CULL_MODE)) == static_cast<size_t>(CullMode::Count), "Mapping is broken!");
 
@@ -178,6 +185,7 @@ struct DXSharedBuffer final
     inline void createView(size_t numElements)
     {
         D3D11_SHADER_RESOURCE_VIEW_DESC viewDesc;
+        std::memset(&viewDesc, 0, sizeof(viewDesc));
         viewDesc.ViewDimension       = D3D11_SRV_DIMENSION_BUFFER;
         viewDesc.Format              = DXGI_FORMAT_UNKNOWN;
         viewDesc.Buffer.ElementWidth = numElements;
@@ -191,6 +199,7 @@ struct DXSharedBuffer final
     inline void createUAV(size_t numElements)
     {
         D3D11_UNORDERED_ACCESS_VIEW_DESC uavDesc;
+        std::memset(&uavDesc, 0, sizeof(uavDesc));
         uavDesc.ViewDimension      = D3D11_UAV_DIMENSION_BUFFER;
         uavDesc.Format             = DXGI_FORMAT_UNKNOWN;
         uavDesc.Buffer.NumElements = numElements;
@@ -308,10 +317,26 @@ static void dxProcessDrawQueue(internal::DrawQueue* queue)
         g_pImmediateContext->GSSetConstantBuffers(0, internal::DrawCall::kMaxConstantBuffers, constantBuffers);
         g_pImmediateContext->PSSetConstantBuffers(0, internal::DrawCall::kMaxConstantBuffers, constantBuffers);
 
-        if (call.type == internal::DrawCall::Draw)
-            g_pImmediateContext->Draw(call.count, call.startVertex);
-        else if (call.type == internal::DrawCall::DrawIndexed)
-            g_pImmediateContext->DrawIndexed(call.count, call.startIndex, call.startVertex);
+        // shader resources
+        ID3D11ShaderResourceView* shaderResources[internal::DrawCall::kMaxShaderResources] = { nullptr };
+        for (size_t i = 0; i < internal::DrawCall::kMaxShaderResources; ++i) {
+            DXSharedBuffer* buffer = static_cast<DXSharedBuffer*>(call.shaderResources[i].value);
+            if (buffer != nullptr)
+                shaderResources[i] = buffer->dataView;
+        }
+
+        g_pImmediateContext->VSSetShaderResources(0, internal::DrawCall::kMaxShaderResources, shaderResources);
+        g_pImmediateContext->HSSetShaderResources(0, internal::DrawCall::kMaxShaderResources, shaderResources);
+        g_pImmediateContext->DSSetShaderResources(0, internal::DrawCall::kMaxShaderResources, shaderResources);
+        g_pImmediateContext->GSSetShaderResources(0, internal::DrawCall::kMaxShaderResources, shaderResources);
+        g_pImmediateContext->PSSetShaderResources(0, internal::DrawCall::kMaxShaderResources, shaderResources);
+
+        switch (call.type) {
+        case internal::DrawCall::Draw:                 { g_pImmediateContext->Draw(call.count, call.startVertex); } break;
+        case internal::DrawCall::DrawIndexed:          { g_pImmediateContext->DrawIndexed(call.count, call.startIndex, call.startVertex); } break;
+        case internal::DrawCall::DrawInstanced:        { g_pImmediateContext->DrawInstanced(call.count, call.instanceCount, call.startVertex, 0); } break;
+        case internal::DrawCall::DrawIndexedInstanced: { g_pImmediateContext->DrawIndexedInstanced(call.count, call.instanceCount, call.startIndex, call.startVertex, 0); } break;
+        }
     }
 }
 
@@ -799,6 +824,32 @@ void releaseBuffer(BufferHandle handle)
     }
 }
 
+void* mapBuffer(BufferHandle handle, MapType type)
+{
+    if (handle != BufferHandle::invalidHandle()) {
+        DXSharedBuffer* buffer = static_cast<DXSharedBuffer*>(handle.value);
+
+        D3D11_MAPPED_SUBRESOURCE mappedData;
+        std::memset(&mappedData, 0, sizeof(mappedData));
+
+        if (FAILED(g_pImmediateContext->Map(buffer->dataBuffer, 0, MapMapType[static_cast<uint32_t>(type)], 0, &mappedData))) {
+            return nullptr;
+        }
+
+        return mappedData.pData;
+    }
+    return nullptr;
+}
+
+void unmapBuffer(BufferHandle handle)
+{
+    if (handle != BufferHandle::invalidHandle()) {
+        DXSharedBuffer* buffer = static_cast<DXSharedBuffer*>(handle.value);
+
+        g_pImmediateContext->Unmap(buffer->dataBuffer, 0);
+    }
+}
+
 ConstantBufferHandle createConstantBuffer(void* mem, size_t size)
 {
     D3D11_BUFFER_DESC bufferDesc;
@@ -1021,6 +1072,22 @@ void drawIndexed(DrawQueueHandle handle, uint32_t count, uint32_t startIndex, ui
     if (handle != DrawQueueHandle::invalidHandle()) {
         internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
         queue->drawIndexed(count, startIndex, startVertex);
+    }
+}
+
+void drawInstanced(DrawQueueHandle handle, uint32_t instanceCount, uint32_t count, uint32_t startVertex)
+{
+    if (handle != DrawQueueHandle::invalidHandle()) {
+        internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
+        queue->drawInstanced(instanceCount, count, startVertex);
+    }
+}
+
+void drawIndexedInstanced(DrawQueueHandle handle, uint32_t instanceCount, uint32_t count, uint32_t startIndex, uint32_t startVertex)
+{
+    if (handle != DrawQueueHandle::invalidHandle()) {
+        internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
+        queue->drawIndexedInstanced(instanceCount, count, startIndex, startVertex);
     }
 }
 

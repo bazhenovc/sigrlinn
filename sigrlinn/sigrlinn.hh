@@ -62,6 +62,14 @@ enum : uint32_t {
 };
 }
 
+enum class MapType : uint32_t
+{
+    Read  = 0,
+    Write = 1,
+
+    Count
+};
+
 // formats
 enum class PrimitiveTopology : uint64_t
 {
@@ -139,6 +147,7 @@ enum class CullMode : uint64_t
 {
     Back,
     Front,
+    None,
 
     Count
 };
@@ -433,6 +442,8 @@ void                  releasePipelineState(PipelineStateHandle handle);
 // buffers
 BufferHandle          createBuffer(uint32_t flags, void* mem, size_t size, size_t stride);
 void                  releaseBuffer(BufferHandle handle); // use this to release all kinds of buffers
+void*                 mapBuffer(BufferHandle handle, MapType type);
+void                  unmapBuffer(BufferHandle handle);
 
 ConstantBufferHandle  createConstantBuffer(void* mem, size_t size);
 void                  updateConstantBuffer(ConstantBufferHandle handle, void* mem);
@@ -467,6 +478,9 @@ void            setResourceRW(DrawQueueHandle handle, uint32_t idx, BufferHandle
 
 void            draw(DrawQueueHandle dq, uint32_t count, uint32_t startVertex);
 void            drawIndexed(DrawQueueHandle dq, uint32_t count, uint32_t startIndex, uint32_t startVertex);
+
+void            drawInstanced(DrawQueueHandle dq, uint32_t instanceCount, uint32_t count, uint32_t startVertex);
+void            drawIndexedInstanced(DrawQueueHandle dq, uint32_t instanceCount, uint32_t count, uint32_t startIndex, uint32_t startVertex);
 
 void            submit(DrawQueueHandle handle);
 

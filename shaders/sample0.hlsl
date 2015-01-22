@@ -1,16 +1,17 @@
 cbuffer ConstantBuffer: register(b0)
 {
-    matrix World;
-    matrix View;
-    matrix Projection;
+    row_major matrix mvp;
 }
 
 struct VS_INPUT
 {
-    float3 position  : POSITION;
-    float2 texcoord0 : TEXCOORDA;
-    float2 texcoord1 : TEXCOORDB;
-    float3 normal    : NORMAL;
+    float3 position    : POSITION;
+    float2 texcoord0   : TEXCOORDA;
+    float2 texcoord1   : TEXCOORDB;
+    float3 normal      : NORMAL;
+    uint   boneIDs     : BONEIDS;
+    float4 boneWeights : BONEWEIGHTS;
+    uint   vertexColor : VCOLOR;
 };
 
 struct VS_OUTPUT
@@ -25,9 +26,7 @@ VS_OUTPUT vs_main(VS_INPUT input)
 {
     VS_OUTPUT output = (VS_OUTPUT)0;
     float4 position = float4(input.position, 1.0);
-    output.position = mul(position, World);
-    output.position = mul(output.position, View);
-    output.position = mul(output.position, Projection);
+    output.position = mul(position, mvp);
 
     output.texcoord0 = input.texcoord0;
     output.texcoord1 = input.texcoord1;

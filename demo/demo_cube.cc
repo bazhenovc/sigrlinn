@@ -3,8 +3,9 @@
 
 #include <memory>
 
-#include <DirectXMath.h>
-using namespace DirectX;
+#define GLM_FORCE_PURE
+#include <glm/glm.hpp>
+#include <glm/ext.hpp>
 
 class CubeApplication : public Application
 {
@@ -12,22 +13,21 @@ public:
 
     struct CommonVertex
     {
-        XMFLOAT3 position;
-        XMFLOAT2 texcoord0;
-        XMFLOAT2 texcoord1;
-        XMFLOAT3 normal;
+        enum { MaxBones = 4 };
+        float position[3];
+        float texcoord0[2];
+        float texcoord1[2];
+        float normal[3];
 
-        CommonVertex() {}
-        CommonVertex(const XMFLOAT3& pos, const XMFLOAT2& tex0, const XMFLOAT2& tex1, const XMFLOAT3& n)
-            : position(pos), texcoord0(tex0), texcoord1(tex1), normal(n)
-        {}
+        // not used
+        uint8_t boneIDs[MaxBones];
+        float   boneWeights[MaxBones];
+        uint8_t color[4];
     };
 
     struct ConstantBuffer
     {
-        XMMATRIX mWorld;
-        XMMATRIX mView;
-        XMMATRIX mProjection;
+        float mvp[16];
     };
 
     sgfx::VertexShaderHandle  vsHandle;
@@ -41,10 +41,6 @@ public:
 
     sgfx::PipelineStateHandle pipelineState;
     sgfx::DrawQueueHandle     drawQueue;
-
-    XMMATRIX                  g_World;
-    XMMATRIX                  g_View;
-    XMMATRIX                  g_Projection;
 
 public:
 
@@ -67,161 +63,171 @@ public:
         constantBuffer = sgfx::createConstantBuffer(nullptr, sizeof(ConstantBuffer));
 
         // mesh data
+        const size_t stride1 = 0;                             // Position
+        const size_t stride2 = stride1 + 3 * sizeof(float);   // uv0
+        const size_t stride3 = stride2 + 2 * sizeof(float);   // uv1
+        const size_t stride4 = stride3 + 2 * sizeof(float);   // normal
+        const size_t stride5 = stride4 + 3 * sizeof(float);   // boneIDs
+        const size_t stride6 = stride5 + 4 * sizeof(uint8_t); // boneWeights
+        const size_t stride7 = stride6 + 4 * sizeof(float);   // color
         sgfx::VertexElementDescriptor vfElements[] = {
-            { "POSITION",  0, sgfx::DataFormat::RGB32F, 0, 0,  sgfx::VertexElementType::PerVertex },
-            { "TEXCOORDA", 0, sgfx::DataFormat::RG32F,  0, 12, sgfx::VertexElementType::PerVertex },
-            { "TEXCOORDB", 0, sgfx::DataFormat::RG32F,  0, 20, sgfx::VertexElementType::PerVertex },
-            { "NORMAL",    0, sgfx::DataFormat::RGB32F, 0, 28, sgfx::VertexElementType::PerVertex },
+            { "POSITION",    0, sgfx::DataFormat::RGB32F,  0, stride1, sgfx::VertexElementType::PerVertex },
+            { "TEXCOORDA",   0, sgfx::DataFormat::RG32F,   0, stride2, sgfx::VertexElementType::PerVertex },
+            { "TEXCOORDB",   0, sgfx::DataFormat::RG32F,   0, stride3, sgfx::VertexElementType::PerVertex },
+            { "NORMAL",      0, sgfx::DataFormat::RGB32F,  0, stride4, sgfx::VertexElementType::PerVertex },
+            { "BONEIDS",     0, sgfx::DataFormat::R32U,    0, stride5, sgfx::VertexElementType::PerVertex },
+            { "BONEWEIGHTS", 0, sgfx::DataFormat::RGBA32F, 0, stride6, sgfx::VertexElementType::PerVertex },
+            { "VCOLOR",      0, sgfx::DataFormat::R32U,    0, stride7, sgfx::VertexElementType::PerVertex }
         };
         size_t vfSize = sizeof(vfElements) / sizeof(sgfx::VertexElementDescriptor);
 
         vertexFormat = loadVF(vfElements, vfSize, "shaders/sample0.hlsl");
 
         CommonVertex cubeVertices[] = {
-        CommonVertex(
-            XMFLOAT3( 1.000000, 1.000000, -1.000000 ), // Vertex
-            XMFLOAT2( 0.000000, 0.000000 ), // Texcoord 0
-            XMFLOAT2( 0, 0 ), // Texcoord 1
-            XMFLOAT3(0.000000, 1.000000, 0.000000 )  // Normal
-        ),
-        CommonVertex(
-            XMFLOAT3(-1.000000, 1.000000, -1.000000 ), // Vertex
-            XMFLOAT2( 0.000000, 1.000000 ), // Texcoord 0
-            XMFLOAT2( 0, 0 ), // Texcoord 1
-            XMFLOAT3( 0.000000, 1.000000, 0.000000 )  // Normal
-        ),
-        CommonVertex(
-            XMFLOAT3( -1.000000, 1.000000, 1.000000 ), // Vertex
-            XMFLOAT2( 1.000000, 1.000000 ), // Texcoord 0
-            XMFLOAT2( 0, 0 ), // Texcoord 1
-            XMFLOAT3( 0.000000, 1.000000, 0.000000 )  // Normal
-        ),
-        CommonVertex(
-            XMFLOAT3( 1.000000, 1.000000, 1.000000 ), // Vertex
-            XMFLOAT2( 1.000000, 0.000000 ), // Texcoord 0
-            XMFLOAT2( 0, 0 ), // Texcoord 1
-            XMFLOAT3( 0.000000, 1.000000, 0.000000 )  // Normal
-        ),
-        CommonVertex(
-            XMFLOAT3( 1.000000, -1.000000, 1.000000 ), // Vertex
-            XMFLOAT2( 0.000000, 0.000000 ), // Texcoord 0
-            XMFLOAT2( 0, 0 ), // Texcoord 1
-            XMFLOAT3( 0.000000, -1.000000, 0.000000 )  // Normal
-        ),
-        CommonVertex(
-            XMFLOAT3( -1.000000, -1.000000, 1.000000 ), // Vertex
-            XMFLOAT2( 0.000000, 1.000000 ), // Texcoord 0
-            XMFLOAT2( 0, 0 ), // Texcoord 1
-            XMFLOAT3( 0.000000, -1.000000, 0.000000 )  // Normal
-        ),
-        CommonVertex(
-            XMFLOAT3( -1.000000, -1.000000, -1.000000 ), // Vertex
-            XMFLOAT2( 1.000000, 1.000000 ), // Texcoord 0
-            XMFLOAT2( 0, 0 ), // Texcoord 1
-            XMFLOAT3( 0.000000, -1.000000, 0.000000 )  // Normal
-        ),
-        CommonVertex(
-            XMFLOAT3( 1.000000, -1.000000, -1.000000 ), // Vertex
-            XMFLOAT2( 1.000000, 0.000000 ), // Texcoord 0
-            XMFLOAT2( 0, 0 ), // Texcoord 1
-            XMFLOAT3( 0.000000, -1.000000, 0.000000 )  // Normal
-        ),
-        CommonVertex(
-            XMFLOAT3( 1.000000, 1.000000, 1.000000 ), // Vertex
-            XMFLOAT2( 0.000000, 0.000000 ), // Texcoord 0
-            XMFLOAT2( 0, 0 ), // Texcoord 1
-            XMFLOAT3( 0.000000, 0.000000, 1.000000 )  // Normal
-        ),
-        CommonVertex(
-            XMFLOAT3( -1.000000, 1.000000, 1.000000 ), // Vertex
-            XMFLOAT2( 0.000000, 1.000000 ), // Texcoord 0
-            XMFLOAT2( 0, 0 ), // Texcoord 1
-            XMFLOAT3( 0.000000, 0.000000, 1.000000 )  // Normal
-        ),
-        CommonVertex(
-            XMFLOAT3( -1.000000, -1.000000, 1.000000 ), // Vertex
-            XMFLOAT2( 1.000000, 1.000000 ), // Texcoord 0
-            XMFLOAT2( 0, 0 ), // Texcoord 1
-            XMFLOAT3( 0.000000, 0.000000, 1.000000 )  // Normal
-        ),
-        CommonVertex(
-            XMFLOAT3( 1.000000, -1.000000, 1.000000 ), // Vertex
-            XMFLOAT2( 1.000000, 0.000000 ), // Texcoord 0
-            XMFLOAT2( 0, 0 ), // Texcoord 1
-            XMFLOAT3( 0.000000, 0.000000, 1.000000 )  // Normal
-        ),
-        CommonVertex(
-            XMFLOAT3( 1.000000, -1.000000, -1.000000 ), // Vertex
-            XMFLOAT2( 0.000000, 0.000000 ), // Texcoord 0
-            XMFLOAT2( 0, 0 ), // Texcoord 1
-            XMFLOAT3( 0.000000, 0.000000, -1.000000 )  // Normal
-        ),
-        CommonVertex(
-            XMFLOAT3( -1.000000, -1.000000, -1.000000 ), // Vertex
-            XMFLOAT2( 0.000000, 1.000000 ), // Texcoord 0
-            XMFLOAT2( 0, 0 ), // Texcoord 1
-            XMFLOAT3( 0.000000, 0.000000, -1.000000 )  // Normal
-        ),
-        CommonVertex(
-            XMFLOAT3( -1.000000, 1.000000, -1.000000 ), // Vertex
-            XMFLOAT2( 1.000000, 1.000000 ), // Texcoord 0
-            XMFLOAT2( 0, 0 ), // Texcoord 1
-            XMFLOAT3( 0.000000, 0.000000, -1.000000 )  // Normal
-        ),
-        CommonVertex(
-            XMFLOAT3( 1.000000, 1.000000, -1.000000 ), // Vertex
-            XMFLOAT2( 1.000000, 0.000000 ), // Texcoord 0
-            XMFLOAT2( 0, 0 ), // Texcoord 1
-            XMFLOAT3( 0.000000, 0.000000, -1.000000 )  // Normal
-        ),
-        CommonVertex(
-            XMFLOAT3( -1.000000, 1.000000, 1.000000 ), // Vertex
-            XMFLOAT2( 0.000000, 0.000000 ), // Texcoord 0
-            XMFLOAT2( 0, 0 ), // Texcoord 1
-            XMFLOAT3( -1.000000, 0.000000, 0.000000 )  // Normal
-        ),
-        CommonVertex(
-            XMFLOAT3( -1.000000, 1.000000, -1.000000 ), // Vertex
-            XMFLOAT2( 0.000000, 1.000000 ), // Texcoord 0
-            XMFLOAT2( 0, 0 ), // Texcoord 1
-            XMFLOAT3( -1.000000, 0.000000, 0.000000 )  // Normal
-        ),
-        CommonVertex(
-            XMFLOAT3( -1.000000, -1.000000, -1.000000 ), // Vertex
-            XMFLOAT2( 1.000000, 1.000000 ), // Texcoord 0
-            XMFLOAT2( 0, 0 ), // Texcoord 1
-            XMFLOAT3( -1.000000, 0.000000, 0.000000 )  // Normal
-        ),
-        CommonVertex(
-            XMFLOAT3( -1.000000, -1.000000, 1.000000 ), // Vertex
-            XMFLOAT2( 1.000000, 0.000000 ), // Texcoord 0
-            XMFLOAT2( 0, 0 ), // Texcoord 1
-            XMFLOAT3( -1.000000, 0.000000, 0.000000 )  // Normal
-        ),
-        CommonVertex(
-            XMFLOAT3( 1.000000, 1.000000, -1.000000 ), // Vertex
-            XMFLOAT2( 0.000000, 0.000000 ), // Texcoord 0
-            XMFLOAT2( 0, 0 ), // Texcoord 1
-            XMFLOAT3( 1.000000, 0.000000, 0.000000 )  // Normal
-        ),
-        CommonVertex(
-            XMFLOAT3( 1.000000, 1.000000, 1.000000 ), // Vertex
-            XMFLOAT2( 0.000000, 1.000000 ), // Texcoord 0
-            XMFLOAT2( 0, 0 ), // Texcoord 1
-            XMFLOAT3( 1.000000, 0.000000, 0.000000 )  // Normal
-        ),
-        CommonVertex(
-            XMFLOAT3( 1.000000, -1.000000, 1.000000 ), // Vertex
-            XMFLOAT2( 1.000000, 1.000000 ), // Texcoord 0
-            XMFLOAT2( 0, 0 ), // Texcoord 1
-            XMFLOAT3( 1.000000, 0.000000, 0.000000 )  // Normal
-        ),
-        CommonVertex(
-            XMFLOAT3( 1.000000, -1.000000, -1.000000 ), // Vertex
-            XMFLOAT2( 1.000000, 0.000000 ), // Texcoord 0
-            XMFLOAT2( 0, 0 ), // Texcoord 1
-            XMFLOAT3( 1.000000, 0.000000, 0.000000 )  // Normal
-        )
+            {
+                { 1.000000, 1.000000, -1.000000 }, // Vertex
+                { 0.000000, 0.000000 }, // Texcoord 0
+                { 0, 0 }, // Texcoord 1
+                { 0.000000, 1.000000, 0.000000 }  // Normal
+            },
+            {
+                {-1.000000, 1.000000, -1.000000 }, // Vertex
+                { 0.000000, 1.000000 }, // Texcoord 0
+                { 0, 0 }, // Texcoord 1
+                { 0.000000, 1.000000, 0.000000 }  // Normal
+            },
+            {
+                { -1.000000, 1.000000, 1.000000 }, // Vertex
+                { 1.000000, 1.000000 }, // Texcoord 0
+                { 0, 0 }, // Texcoord 1
+                { 0.000000, 1.000000, 0.000000 }  // Normal
+            },
+            {
+                { 1.000000, 1.000000, 1.000000 }, // Vertex
+                { 1.000000, 0.000000 }, // Texcoord 0
+                { 0, 0 }, // Texcoord 1
+                { 0.000000, 1.000000, 0.000000 }  // Normal
+            },
+            {
+                { 1.000000, -1.000000, 1.000000 }, // Vertex
+                { 0.000000, 0.000000 }, // Texcoord 0
+                { 0, 0 }, // Texcoord 1
+                { 0.000000, -1.000000, 0.000000 }  // Normal
+            },
+            {
+                { -1.000000, -1.000000, 1.000000 }, // Vertex
+                { 0.000000, 1.000000 }, // Texcoord 0
+                { 0, 0 }, // Texcoord 1
+                { 0.000000, -1.000000, 0.000000 }  // Normal
+            },
+            {
+                { -1.000000, -1.000000, -1.000000 }, // Vertex
+                { 1.000000, 1.000000 }, // Texcoord 0
+                { 0, 0 }, // Texcoord 1
+                { 0.000000, -1.000000, 0.000000 }  // Normal
+            },
+            {
+                { 1.000000, -1.000000, -1.000000 }, // Vertex
+                { 1.000000, 0.000000 }, // Texcoord 0
+                { 0, 0 }, // Texcoord 1
+                { 0.000000, -1.000000, 0.000000 }  // Normal
+            },
+            {
+                { 1.000000, 1.000000, 1.000000 }, // Vertex
+                { 0.000000, 0.000000 }, // Texcoord 0
+                { 0, 0 }, // Texcoord 1
+                { 0.000000, 0.000000, 1.000000 }  // Normal
+            },
+            {
+                { -1.000000, 1.000000, 1.000000 }, // Vertex
+                { 0.000000, 1.000000 }, // Texcoord 0
+                { 0, 0 }, // Texcoord 1
+                { 0.000000, 0.000000, 1.000000 }  // Normal
+            },
+            {
+                { -1.000000, -1.000000, 1.000000 }, // Vertex
+                { 1.000000, 1.000000 }, // Texcoord 0
+                { 0, 0 }, // Texcoord 1
+                { 0.000000, 0.000000, 1.000000 }  // Normal
+            },
+            {
+                { 1.000000, -1.000000, 1.000000 }, // Vertex
+                { 1.000000, 0.000000 }, // Texcoord 0
+                { 0, 0 }, // Texcoord 1
+                { 0.000000, 0.000000, 1.000000 }  // Normal
+            },
+            {
+                { 1.000000, -1.000000, -1.000000 }, // Vertex
+                { 0.000000, 0.000000 }, // Texcoord 0
+                { 0, 0 }, // Texcoord 1
+                { 0.000000, 0.000000, -1.000000 }  // Normal
+            },
+            {
+                { -1.000000, -1.000000, -1.000000 }, // Vertex
+                { 0.000000, 1.000000 }, // Texcoord 0
+                { 0, 0 }, // Texcoord 1
+                { 0.000000, 0.000000, -1.000000 }  // Normal
+            },
+            {
+                { -1.000000, 1.000000, -1.000000 }, // Vertex
+                { 1.000000, 1.000000 }, // Texcoord 0
+                { 0, 0 }, // Texcoord 1
+                { 0.000000, 0.000000, -1.000000 }  // Normal
+            },
+            {
+                { 1.000000, 1.000000, -1.000000 }, // Vertex
+                { 1.000000, 0.000000 }, // Texcoord 0
+                { 0, 0 }, // Texcoord 1
+                { 0.000000, 0.000000, -1.000000 }  // Normal
+            },
+            {
+                { -1.000000, 1.000000, 1.000000 }, // Vertex
+                { 0.000000, 0.000000 }, // Texcoord 0
+                { 0, 0 }, // Texcoord 1
+                { -1.000000, 0.000000, 0.000000 }  // Normal
+            },
+            {
+                { -1.000000, 1.000000, -1.000000 }, // Vertex
+                { 0.000000, 1.000000 }, // Texcoord 0
+                { 0, 0 }, // Texcoord 1
+                { -1.000000, 0.000000, 0.000000 }  // Normal
+            },
+            {
+                { -1.000000, -1.000000, -1.000000 }, // Vertex
+                { 1.000000, 1.000000 }, // Texcoord 0
+                { 0, 0 }, // Texcoord 1
+                { -1.000000, 0.000000, 0.000000 }  // Normal
+            },
+            {
+                { -1.000000, -1.000000, 1.000000 }, // Vertex
+                { 1.000000, 0.000000 }, // Texcoord 0
+                { 0, 0 }, // Texcoord 1
+                { -1.000000, 0.000000, 0.000000 }  // Normal
+            },
+            {
+                { 1.000000, 1.000000, -1.000000 }, // Vertex
+                { 0.000000, 0.000000 }, // Texcoord 0
+                { 0, 0 }, // Texcoord 1
+                { 1.000000, 0.000000, 0.000000 }  // Normal
+            },
+            {
+                { 1.000000, 1.000000, 1.000000 }, // Vertex
+                { 0.000000, 1.000000 }, // Texcoord 0
+                { 0, 0 }, // Texcoord 1
+                { 1.000000, 0.000000, 0.000000 }  // Normal
+            },
+            {
+                { 1.000000, -1.000000, 1.000000 }, // Vertex
+                { 1.000000, 1.000000 }, // Texcoord 0
+                { 0, 0 }, // Texcoord 1
+                { 1.000000, 0.000000, 0.000000 }  // Normal
+            },
+            {
+                { 1.000000, -1.000000, -1.000000 }, // Vertex
+                { 1.000000, 0.000000 }, // Texcoord 0
+                { 0, 0 }, // Texcoord 1
+                { 1.000000, 0.000000, 0.000000 }  // Normal
+            }
         };
         size_t verticesSize = sizeof(cubeVertices) / sizeof(CommonVertex);
 
@@ -249,7 +255,7 @@ public:
 
             desc.rasterizerState.fillMode                           = sgfx::FillMode::Solid;
             desc.rasterizerState.cullMode                           = sgfx::CullMode::Back;
-            desc.rasterizerState.counterDirection                   = sgfx::CounterDirection::CCW;
+            desc.rasterizerState.counterDirection                   = sgfx::CounterDirection::CW;
 
             desc.blendState.blendDesc.blendEnabled                  = false;
             desc.blendState.blendDesc.writeMask                     = sgfx::ColorWriteMask::All; // not implemented
@@ -318,21 +324,14 @@ public:
             dwTimeStart = dwTimeCur;
         t = (dwTimeCur - dwTimeStart) / 1000.0f;
 
-        g_World = XMMatrixRotationY(t);
+        glm::mat4 projection = glm::perspective(glm::pi<float>() / 2.0F, width / (FLOAT)height, 0.01f, 100.0f);
+        glm::mat4 view       = glm::lookAt(glm::vec3(0.0F, 1.0F, -5.0F), glm::vec3(0.0F, 1.0F, 0.0F), glm::vec3(0.0F, 1.0F, 0.0F));
+        glm::mat4 world      = glm::rotate(glm::mat4(1.0F), t, glm::vec3(0.0F, 1.0F, 0.0F));
 
-        // Initialize the view matrix
-        XMVECTOR Eye = XMVectorSet( 0.0f, 1.0f, -5.0f, 0.0f );
-        XMVECTOR At = XMVectorSet( 0.0f, 1.0f, 0.0f, 0.0f );
-        XMVECTOR Up = XMVectorSet( 0.0f, 1.0f, 0.0f, 0.0f );
-        g_View = XMMatrixLookAtLH( Eye, At, Up );
-
-        // Initialize the projection matrix
-        g_Projection = XMMatrixPerspectiveFovLH( XM_PIDIV2, width / (FLOAT)height, 0.01f, 100.0f );
+        glm::mat4 mvp = projection * view * world;
 
         ConstantBuffer constants;
-        constants.mWorld      = XMMatrixTranspose(g_World);
-        constants.mView       = XMMatrixTranspose(g_View);
-        constants.mProjection = XMMatrixTranspose(g_Projection);
+        std::memcpy(constants.mvp, glm::value_ptr(mvp), sizeof(constants.mvp));
         sgfx::updateConstantBuffer(constantBuffer, &constants);
 
         // actually draw some stuff

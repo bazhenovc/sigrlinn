@@ -30,6 +30,7 @@ source_group("demo\\source"  FILES ${demo_src})
 source_group("demo\\include" FILES ${demo_hdr})
 
 include_directories(${CMAKE_SOURCE_DIR}/sigrlinn)
+include_directories(${CMAKE_SOURCE_DIR}/external/glm/)
 add_library(Sigrlinn STATIC
 	${demo_common_src}
 	${demo_common_hdr}
@@ -45,8 +46,8 @@ add_library(Sigrlinn STATIC
 	sigrlinn/GL/wglew.h
 )
 
-#add_executable(AsteroidsDemo WIN32 demo/demo_asteroids.cc demo/win32_app.cc)
-#target_link_libraries(AsteroidsDemo Sigrlinn)
+add_executable(GrassDemo WIN32 demo/demo_grass.cc demo/win32_app.cc)
+target_link_libraries(GrassDemo Sigrlinn)
 
 add_executable(Cube WIN32 demo/demo_cube.cc demo/win32_app.cc)
 target_link_libraries(Cube Sigrlinn)

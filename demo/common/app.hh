@@ -7,6 +7,7 @@
 
 #define APP_WIN32
 #ifdef APP_WIN32
+#define NOMINMAX
 #include <windows.h>
 #include <d3d11.h>
 #endif

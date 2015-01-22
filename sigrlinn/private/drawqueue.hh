@@ -16,8 +16,10 @@ struct DrawCall final
 {
     enum Type : uint32_t
     {
-        Draw        = 0,
-        DrawIndexed = 1
+        Draw                 = 0,
+        DrawIndexed          = 1,
+        DrawInstanced        = 2,
+        DrawIndexedInstanced = 3
     };
 
     enum
@@ -34,6 +36,7 @@ struct DrawCall final
     BufferHandle      indexBuffer;
     PrimitiveTopology primitiveTopology;
 
+    uint32_t instanceCount;
     uint32_t count;
     uint32_t startVertex;
     uint32_t startIndex;
@@ -98,6 +101,28 @@ public:
         currentDrawCall.startVertex = startVertex;
         currentDrawCall.startIndex  = startIndex;
         currentDrawCall.type        = DrawCall::DrawIndexed;
+        drawCalls.Add(currentDrawCall);
+        std::memset(&currentDrawCall, 0, sizeof(currentDrawCall));
+    }
+
+    inline void drawInstanced(uint32_t instanceCount, uint32_t count, uint32_t startVertex)
+    {
+        currentDrawCall.instanceCount = instanceCount;
+        currentDrawCall.count         = count;
+        currentDrawCall.startVertex   = startVertex;
+        currentDrawCall.startIndex    = 0;
+        currentDrawCall.type          = DrawCall::DrawInstanced;
+        drawCalls.Add(currentDrawCall);
+        std::memset(&currentDrawCall, 0, sizeof(currentDrawCall));
+    }
+
+    inline void drawIndexedInstanced(uint32_t instanceCount, uint32_t count, uint32_t startIndex, uint32_t startVertex)
+    {
+        currentDrawCall.instanceCount = instanceCount;
+        currentDrawCall.count         = count;
+        currentDrawCall.startVertex   = startVertex;
+        currentDrawCall.startIndex    = startIndex;
+        currentDrawCall.type          = DrawCall::DrawIndexedInstanced;
         drawCalls.Add(currentDrawCall);
         std::memset(&currentDrawCall, 0, sizeof(currentDrawCall));
     }
