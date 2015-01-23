@@ -20,6 +20,10 @@
 /// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 /// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 /// THE SOFTWARE.
-#ifdef NDA_CODE_AMD_MANTLE
-// NDACodeStripper v0.17: 1328 lines removed
-#endif
+#pragma once
+
+#include "sigrlinn.hh"
+
+#include <string>
+
+sgfx::Texture2DHandle loadDDS(const std::string& path);

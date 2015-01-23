@@ -1,6 +1,28 @@
-
+/// The MIT License (MIT)
+///
+/// Copyright (c) 2015 Kirill Bazhenov
+/// Copyright (c) 2015 BitBox, Ltd.
+///
+/// Permission is hereby granted, free of charge, to any person obtaining a copy
+/// of this software and associated documentation files (the "Software"), to deal
+/// in the Software without restriction, including without limitation the rights
+/// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+/// copies of the Software, and to permit persons to whom the Software is
+/// furnished to do so, subject to the following conditions:
+///
+/// The above copyright notice and this permission notice shall be included in
+/// all copies or substantial portions of the Software.
+///
+/// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+/// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+/// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+/// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+/// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+/// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+/// THE SOFTWARE.
 #include "common/app.hh"
 #include "common/meshloader.hh"
+#include "common/textureloader.hh"
 
 #include <vector>
 #include <memory>
@@ -183,6 +205,8 @@ struct DVPGrassManager final
     PhysicalMeshBuffer        physicalVertexBuffer;
     PhysicalMeshBuffer        physicalIndexBuffer;
 
+    sgfx::Texture2DHandle grassTexture;
+
     sgfx::BufferHandle sharedConstantBuffer;
     size_t             numInstances = 0;
 
@@ -198,7 +222,13 @@ struct DVPGrassManager final
         for (LogicalMesh* mesh: logicalMeshes) {
             delete mesh; // TODO: release
         }
+        sgfx::releaseTexture(grassTexture);
         sgfx::releaseBuffer(sharedConstantBuffer);
+    }
+
+    void loadTexture(const std::string& path)
+    {
+        grassTexture = loadDDS(path);
     }
 
     void loadDataSet(const std::string& path)
@@ -217,12 +247,16 @@ struct DVPGrassManager final
                 logicalMeshes.push_back(logicalMesh);
             }
 
+            srand(GetTickCount());
             size_t meshCounter = 0;
             for (int i = -kObjectSizeSquared; i < kObjectSizeSquared; ++i) {
                 for (int j = -kObjectSizeSquared; j < kObjectSizeSquared; ++j) {
 
-                    float fx = static_cast<float>(i) * 3.0F;
-                    float fy = static_cast<float>(j) * 3.0F;
+                    float rx = static_cast<float>(rand() % 10);
+                    float ry = static_cast<float>(rand() % 10);
+
+                    float fx = static_cast<float>(i) * 3.0F + rx;
+                    float fy = static_cast<float>(j) * 3.0F + ry;
 
                     GrassObject obj(logicalMeshes[meshCounter]);
                     obj.position = glm::vec3(fx, 0.0F, fy);
@@ -286,6 +320,7 @@ struct DVPGrassManager final
         sgfx::setResource(drawQueue, 0, physicalVertexBuffer.physicalBuffer);
         sgfx::setResource(drawQueue, 1, physicalIndexBuffer.physicalBuffer);
         sgfx::setResource(drawQueue, 2, sharedConstantBuffer);
+        sgfx::setResource(drawQueue, 3, grassTexture);
         sgfx::drawInstanced(drawQueue, numInstances, maxDrawCallCount, 0);
     }
 };
@@ -323,6 +358,7 @@ public:
         // mesh data
         grassManager = new DVPGrassManager;
         grassManager->loadDataSet("data/meshes/cattail/");
+        grassManager->loadTexture("data/textures/CattailBlades.dds");
 
         vsHandle = loadVS("shaders/dvp.hlsl");
         psHandle = loadPS("shaders/dvp.hlsl");
@@ -373,7 +409,7 @@ public:
             desc.depthStencilState.backFaceStencilDesc.passOp       = sgfx::StencilOp::Keep;
 
             desc.shader       = ssHandle;
-            //desc.vertexFormat = vertexFormat;
+            desc.vertexFormat = sgfx::VertexFormatHandle::invalidHandle();
 
             pipelineState = sgfx::createPipelineState(desc);
             if (pipelineState != sgfx::PipelineStateHandle::invalidHandle()) {
@@ -401,7 +437,7 @@ public:
     {
         // Update our time
         static float t = 0.0f;
-        static glm::vec3 cameraPosition = glm::vec3(0.0F, 30.0F, -500.0F);
+        static glm::vec3 cameraPosition = glm::vec3(0.0F, 4.0F, -200);
 
         static DWORD dwTimeStart = 0;
         DWORD dwTimeCur = GetTickCount();
@@ -418,7 +454,7 @@ public:
             sprintf_s(buf, "DT: %f\n", t);
             OutputDebugString(buf);
         }
-        cameraPosition.z += t * 5.0F;
+        cameraPosition.z += t * 2.0F;
 
         glm::mat4 projection = glm::perspective(glm::pi<float>() / 2.0F, width / (FLOAT)height, 0.01f, 50000.0f);
         glm::mat4 view       = glm::lookAt(cameraPosition, cameraPosition + glm::vec3(0.0F, 0.0F, 1.0F), glm::vec3(0.0F, 1.0F, 0.0F));

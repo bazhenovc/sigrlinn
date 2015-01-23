@@ -1,4 +1,25 @@
-
+/// The MIT License (MIT)
+///
+/// Copyright (c) 2015 Kirill Bazhenov
+/// Copyright (c) 2015 BitBox, Ltd.
+///
+/// Permission is hereby granted, free of charge, to any person obtaining a copy
+/// of this software and associated documentation files (the "Software"), to deal
+/// in the Software without restriction, including without limitation the rights
+/// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+/// copies of the Software, and to permit persons to whom the Software is
+/// furnished to do so, subject to the following conditions:
+///
+/// The above copyright notice and this permission notice shall be included in
+/// all copies or substantial portions of the Software.
+///
+/// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+/// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+/// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+/// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+/// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+/// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+/// THE SOFTWARE.
 #include "sigrlinn.hh"
 #include "private/drawqueue.hh"
 
@@ -27,23 +48,23 @@ static D3D11_PRIMITIVE_TOPOLOGY MapPrimitiveTopology[PrimitiveTopology::Count] =
 static_assert((sizeof(MapPrimitiveTopology) / sizeof(D3D11_PRIMITIVE_TOPOLOGY)) == static_cast<size_t>(PrimitiveTopology::Count), "Mapping is broken!");
 
 static DXGI_FORMAT MapDataFormat[DataFormat::Count] = {
-    DXGI_FORMAT_BC1_TYPELESS,    // DXT1
-    DXGI_FORMAT_BC2_TYPELESS,    // DXT3
-    DXGI_FORMAT_BC3_TYPELESS,    // DXT5
-    DXGI_FORMAT_BC4_TYPELESS,    // LATC1/ATI1
-    DXGI_FORMAT_BC5_TYPELESS,    // LATC2/ATI2
-    DXGI_FORMAT_BC6H_TYPELESS,   // BC6H
-    DXGI_FORMAT_BC7_TYPELESS,    // BC7
-    DXGI_FORMAT_UNKNOWN,         // ETC1 RGB8
-    DXGI_FORMAT_UNKNOWN,         // ETC2 RGB8
-    DXGI_FORMAT_UNKNOWN,         // ETC2 RGBA8
-    DXGI_FORMAT_UNKNOWN,         // ETC2 RGB8A1
-    DXGI_FORMAT_UNKNOWN,         // PVRTC1 RGB 2BPP
-    DXGI_FORMAT_UNKNOWN,         // PVRTC1 RGB 4BPP
-    DXGI_FORMAT_UNKNOWN,         // PVRTC1 RGBA 2BPP
-    DXGI_FORMAT_UNKNOWN,         // PVRTC1 RGBA 4BPP
-    DXGI_FORMAT_UNKNOWN,         // PVRTC2 RGBA 2BPP
-    DXGI_FORMAT_UNKNOWN,         // PVRTC2 RGBA 4BPP
+    DXGI_FORMAT_BC1_UNORM,     // DXT1
+    DXGI_FORMAT_BC2_UNORM,     // DXT3
+    DXGI_FORMAT_BC3_UNORM,     // DXT5
+    DXGI_FORMAT_BC4_UNORM,     // LATC1/ATI1
+    DXGI_FORMAT_BC5_UNORM,     // LATC2/ATI2
+    DXGI_FORMAT_BC6H_TYPELESS, // BC6H
+    DXGI_FORMAT_BC7_UNORM,     // BC7
+    DXGI_FORMAT_UNKNOWN,       // ETC1 RGB8
+    DXGI_FORMAT_UNKNOWN,       // ETC2 RGB8
+    DXGI_FORMAT_UNKNOWN,       // ETC2 RGBA8
+    DXGI_FORMAT_UNKNOWN,       // ETC2 RGB8A1
+    DXGI_FORMAT_UNKNOWN,       // PVRTC1 RGB 2BPP
+    DXGI_FORMAT_UNKNOWN,       // PVRTC1 RGB 4BPP
+    DXGI_FORMAT_UNKNOWN,       // PVRTC1 RGBA 2BPP
+    DXGI_FORMAT_UNKNOWN,       // PVRTC1 RGBA 4BPP
+    DXGI_FORMAT_UNKNOWN,       // PVRTC2 RGBA 2BPP
+    DXGI_FORMAT_UNKNOWN,       // PVRTC2 RGBA 4BPP
 
     DXGI_FORMAT_UNKNOWN,         // compressed formats above
 
@@ -161,7 +182,7 @@ IDXGISwapChain*       g_pSwapChain         = nullptr;
 //=============================================================================
 struct DXSharedBuffer final
 {
-    ID3D11Buffer*              dataBuffer     = nullptr;
+    ID3D11Resource*            dataBuffer     = nullptr;
     ID3D11ShaderResourceView*  dataView       = nullptr;
     ID3D11UnorderedAccessView* dataUAV        = 0;
     size_t                     dataBufferSize = 0;
@@ -172,14 +193,6 @@ struct DXSharedBuffer final
         if (dataBuffer != nullptr) dataBuffer->Release();
         if (dataView   != nullptr) dataView->Release();
         if (dataUAV    != nullptr) dataUAV->Release();
-    }
-
-    inline void createFromDesc(const D3D11_BUFFER_DESC& bufferDesc, const D3D11_SUBRESOURCE_DATA& bufferData)
-    {
-        if (FAILED(g_pd3dDevice->CreateBuffer(&bufferDesc, (bufferData.pSysMem == nullptr) ? nullptr : &bufferData, &dataBuffer))) {
-            // TODO: error handling
-            return;
-        }
     }
 
     inline void createView(size_t numElements)
@@ -302,8 +315,12 @@ static void dxProcessDrawQueue(internal::DrawQueue* queue)
 
         g_pImmediateContext->IASetPrimitiveTopology(MapPrimitiveTopology[static_cast<uint64_t>(call.primitiveTopology)]);
         if (psimpl->vertexFormat != nullptr) {
-            g_pImmediateContext->IASetVertexBuffers(0, 1, &vertexBuffer->dataBuffer, &psimpl->vertexFormat->stride, &offset);
-            g_pImmediateContext->IASetIndexBuffer(indexBuffer->dataBuffer, DXGI_FORMAT_R32_UINT, 0);
+            
+            ID3D11Buffer* vbuffer = static_cast<ID3D11Buffer*>(vertexBuffer->dataBuffer);
+            ID3D11Buffer* ibuffer = static_cast<ID3D11Buffer*>(indexBuffer->dataBuffer);
+
+            g_pImmediateContext->IASetVertexBuffers(0, 1, &vbuffer, &psimpl->vertexFormat->stride, &offset);
+            g_pImmediateContext->IASetIndexBuffer(ibuffer, DXGI_FORMAT_R32_UINT, 0);
         }
 
         // constant buffers are ID3D11Buffers effectively
@@ -757,8 +774,6 @@ void releasePipelineState(PipelineStateHandle handle)
 
 BufferHandle createBuffer(uint32_t flags, void* mem, size_t size, size_t stride)
 {
-    DXSharedBuffer* buffer = new DXSharedBuffer;
-
     D3D11_USAGE bufferUsage    = D3D11_USAGE_IMMUTABLE;
     UINT        bufferCPUFlags = 0;
     UINT        bufferBindFlag = 0;
@@ -808,7 +823,14 @@ BufferHandle createBuffer(uint32_t flags, void* mem, size_t size, size_t stride)
     std::memset(&bufferData, 0, sizeof(bufferData));
     bufferData.pSysMem = mem;
 
-    buffer->createFromDesc(bufferDesc, bufferData);
+    ID3D11Buffer* d3dbuffer = nullptr;
+    if (FAILED(g_pd3dDevice->CreateBuffer(&bufferDesc, (bufferData.pSysMem == nullptr) ? nullptr : &bufferData, &d3dbuffer))) {
+        // TODO: error handling
+        return BufferHandle::invalidHandle();
+    }
+
+    DXSharedBuffer* buffer = new DXSharedBuffer;
+    buffer->dataBuffer = d3dbuffer;
 
     if (isStructured) buffer->createView(size / stride);
     if (isUAV)        buffer->createUAV(size / stride);
@@ -906,11 +928,29 @@ Texture1DHandle createTexture1D(uint32_t width, DataFormat format, size_t numMip
     textureDesc.CPUAccessFlags = 0;
     textureDesc.MiscFlags      = 0;
 
-    ID3D11Texture1D* texture = nullptr;
-    if (FAILED(g_pd3dDevice->CreateTexture1D(&textureDesc, nullptr, &texture))) {
+    ID3D11Texture1D* d3dTexture = nullptr;
+    if (FAILED(g_pd3dDevice->CreateTexture1D(&textureDesc, nullptr, &d3dTexture))) {
         // TODO: error handling
         return Texture1DHandle::invalidHandle();
     }
+
+    D3D11_SHADER_RESOURCE_VIEW_DESC viewDesc;
+    std::memset(&viewDesc, 0, sizeof(viewDesc));
+
+    viewDesc.Format              = MapDataFormat[static_cast<uint32_t>(format)];
+    viewDesc.ViewDimension       = D3D11_SRV_DIMENSION_TEXTURE1D;
+    viewDesc.Texture1D.MipLevels = numMipmaps;
+
+    ID3D11ShaderResourceView* d3dResourceView = nullptr;
+    if (FAILED(g_pd3dDevice->CreateShaderResourceView(d3dTexture, &viewDesc, &d3dResourceView))) {
+        // TODO: error handling
+        d3dTexture->Release();
+        return Texture1DHandle::invalidHandle();
+    }
+
+    DXSharedBuffer* texture = new DXSharedBuffer;
+    texture->dataBuffer = d3dTexture;
+    texture->dataView   = d3dResourceView;
 
     return Texture1DHandle(texture);
 }
@@ -933,13 +973,31 @@ Texture2DHandle createTexture2D(uint32_t width, uint32_t height, DataFormat form
     textureDesc.SampleDesc.Count   = 1;
     textureDesc.SampleDesc.Quality = 0;
 
-    ID3D11Texture2D* texture = nullptr;
-    if (FAILED(g_pd3dDevice->CreateTexture2D(&textureDesc, nullptr, &texture))) {
+    ID3D11Texture2D* d3dTexture = nullptr;
+    if (FAILED(g_pd3dDevice->CreateTexture2D(&textureDesc, nullptr, &d3dTexture))) {
         // TODO: error handling
-        return Texture2DHandle::invalidHandle();
+        return Texture1DHandle::invalidHandle();
     }
 
-    return Texture2DHandle(texture);
+    D3D11_SHADER_RESOURCE_VIEW_DESC viewDesc;
+    std::memset(&viewDesc, 0, sizeof(viewDesc));
+
+    viewDesc.Format              = MapDataFormat[static_cast<uint32_t>(format)];
+    viewDesc.ViewDimension       = D3D11_SRV_DIMENSION_TEXTURE2D;
+    viewDesc.Texture2D.MipLevels = numMipmaps;
+
+    ID3D11ShaderResourceView* d3dResourceView = nullptr;
+    if (FAILED(g_pd3dDevice->CreateShaderResourceView(d3dTexture, &viewDesc, &d3dResourceView))) {
+        // TODO: error handling
+        d3dTexture->Release();
+        return Texture1DHandle::invalidHandle();
+    }
+
+    DXSharedBuffer* texture = new DXSharedBuffer;
+    texture->dataBuffer = d3dTexture;
+    texture->dataView   = d3dResourceView;
+
+    return Texture1DHandle(texture);
 }
 
 Texture3DHandle createTexture3D(uint32_t width, uint32_t height, uint32_t depth, DataFormat format, size_t numMipmaps)
@@ -957,11 +1015,29 @@ Texture3DHandle createTexture3D(uint32_t width, uint32_t height, uint32_t depth,
     textureDesc.CPUAccessFlags = 0;
     textureDesc.MiscFlags      = 0;
 
-    ID3D11Texture3D* texture = nullptr;
-    if (FAILED(g_pd3dDevice->CreateTexture3D(&textureDesc, nullptr, &texture))) {
+    ID3D11Texture3D* d3dTexture = nullptr;
+    if (FAILED(g_pd3dDevice->CreateTexture3D(&textureDesc, nullptr, &d3dTexture))) {
         // TODO: error handling
-        return Texture3DHandle::invalidHandle();
+        return Texture1DHandle::invalidHandle();
     }
+
+    D3D11_SHADER_RESOURCE_VIEW_DESC viewDesc;
+    std::memset(&viewDesc, 0, sizeof(viewDesc));
+
+    viewDesc.Format              = MapDataFormat[static_cast<uint32_t>(format)];
+    viewDesc.ViewDimension       = D3D11_SRV_DIMENSION_TEXTURE3D;
+    viewDesc.Texture3D.MipLevels = numMipmaps;
+
+    ID3D11ShaderResourceView* d3dResourceView = nullptr;
+    if (FAILED(g_pd3dDevice->CreateShaderResourceView(d3dTexture, &viewDesc, &d3dResourceView))) {
+        // TODO: error handling
+        d3dTexture->Release();
+        return Texture1DHandle::invalidHandle();
+    }
+
+    DXSharedBuffer* texture = new DXSharedBuffer;
+    texture->dataBuffer = d3dTexture;
+    texture->dataView   = d3dResourceView;
 
     return Texture3DHandle(texture);
 }
@@ -969,13 +1045,14 @@ Texture3DHandle createTexture3D(uint32_t width, uint32_t height, uint32_t depth,
 void updateTexture(
     TextureHandle handle, void* mem,
     uint32_t mip,
-    size_t offsetX, size_t sizeX,
-    size_t offsetY, size_t sizeY,
-    size_t offsetZ, size_t sizeZ
+    size_t offsetX,  size_t sizeX,
+    size_t offsetY,  size_t sizeY,
+    size_t offsetZ,  size_t sizeZ,
+    size_t rowPitch, size_t depthPitch
 )
 {
     if (handle != TextureHandle::invalidHandle()) {
-        ID3D11Resource* resource = static_cast<ID3D11Resource*>(handle.value);
+        DXSharedBuffer* texture  = static_cast<DXSharedBuffer*>(handle.value);
 
         D3D11_BOX box;
         box.left   = offsetX;
@@ -985,15 +1062,15 @@ void updateTexture(
         box.front  = offsetZ;
         box.back   = offsetZ + sizeZ;
 
-        g_pImmediateContext->UpdateSubresource(resource, mip, &box, mem, sizeY, sizeZ);
+        g_pImmediateContext->UpdateSubresource(texture->dataBuffer, mip, &box, mem, rowPitch, depthPitch);
     }
 }
 
 void releaseTexture(TextureHandle handle)
 {
     if (handle != TextureHandle::invalidHandle()) {
-        ID3D11Resource* resource = static_cast<ID3D11Resource*>(handle.value);
-        resource->Release();
+        DXSharedBuffer* texture = static_cast<DXSharedBuffer*>(handle.value);
+        delete texture;
     }
 }
 
@@ -1044,6 +1121,14 @@ void setConstantBuffer(DrawQueueHandle handle, uint32_t idx, ConstantBufferHandl
 }
 
 void setResource(DrawQueueHandle handle, uint32_t idx, BufferHandle resource)
+{
+    if (handle != DrawQueueHandle::invalidHandle()) {
+        internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
+        queue->setResource(idx, resource);
+    }
+}
+
+void setResource(DrawQueueHandle handle, uint32_t idx, TextureHandle resource)
 {
     if (handle != DrawQueueHandle::invalidHandle()) {
         internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
