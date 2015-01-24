@@ -100,7 +100,32 @@ enum class PrimitiveTopology : uint64_t
     Count
 };
 
-enum class DataFormat : uint64_t
+enum class TextureFilter : uint32_t
+{
+    MinMagMip_Point,
+    MinMag_Point_Mip_Linear,
+    Min_Point_Mag_Linear_Mip_Point,
+    Min_Point_MagMip_Linear,
+    Min_Linear_MagMip_Point,
+    Min_Linear_Mag_Point_Mip_Linear,
+    MinMag_Linear_Mip_Point,
+    MinMagMip_Linear,
+    Anisotropic,
+
+    Count
+};
+
+enum class AddressMode : uint32_t
+{
+    Wrap,
+    Mirror,
+    Clamp,
+    Border,
+
+    Count
+};
+
+enum class DataFormat : uint32_t
 {
     BC1,    // DXT1
     BC2,    // DXT3
@@ -348,13 +373,27 @@ struct VertexElementDescriptor
     VertexElementType type;
 };
 
+struct SamplerStateDescriptor
+{
+    TextureFilter   filter         = TextureFilter::MinMagMip_Linear;
+    AddressMode     addressU       = AddressMode::Clamp;
+    AddressMode     addressV       = AddressMode::Clamp;
+    AddressMode     addressW       = AddressMode::Clamp;
+    float           lodBias        = 0.0F;
+    uint32_t        maxAnisotropy  = 1;
+    ComparisonFunc  comparisonFunc = ComparisonFunc::Never;
+    uint32_t        borderColor    = 0xFFFFFFFF;
+    float           minLod         = -3.402823466e+38F;
+    float           maxLod         = 3.402823466e+38F;
+};
+
 // caps
 enum class GPUCaps : uint64_t
 {
-    GeometryShader        = 1UL << 0,
-    TessellationShader    = 1UL << 1,
-    ComputeShader         = 1UL << 2,
-    MultipleRenderTargets = 1UL << 3
+    GeometryShader        = (1UL << 0),
+    TessellationShader    = (1UL << 1),
+    ComputeShader         = (1UL << 2),
+    MultipleRenderTargets = (1UL << 3)
 };
 
 // misc
@@ -471,6 +510,9 @@ void                  updateConstantBuffer(ConstantBufferHandle handle, void* me
 void                  releaseConstantBuffer(ConstantBufferHandle handle);
 
 // textures
+SamplerStateHandle createSamplerState(const SamplerStateDescriptor& desc);
+void               releaseSamplerState(SamplerStateHandle handle);
+
 Texture1DHandle createTexture1D(uint32_t width, DataFormat format, size_t numMipmaps);
 Texture2DHandle createTexture2D(uint32_t width, uint32_t height, DataFormat format, size_t numMipmaps);
 Texture3DHandle createTexture3D(uint32_t width, uint32_t height, uint32_t depth, DataFormat format, size_t numMipmaps);
@@ -489,6 +531,10 @@ void            releaseTexture(TextureHandle handle);
 DrawQueueHandle createDrawQueue(PipelineStateHandle state);
 void            releaseDrawQueue(DrawQueueHandle handle);
 
+// per queue
+void            setSamplerState(DrawQueueHandle handle, uint32_t idx, SamplerStateHandle sampler);
+
+// per draw call
 void            setPrimitiveTopology(DrawQueueHandle qd, PrimitiveTopology topology);
 void            setVertexBuffer(DrawQueueHandle dq, BufferHandle vb);
 void            setIndexBuffer(DrawQueueHandle dq, BufferHandle ib);

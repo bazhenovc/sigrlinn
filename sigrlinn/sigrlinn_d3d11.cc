@@ -47,6 +47,27 @@ static D3D11_PRIMITIVE_TOPOLOGY MapPrimitiveTopology[PrimitiveTopology::Count] =
 };
 static_assert((sizeof(MapPrimitiveTopology) / sizeof(D3D11_PRIMITIVE_TOPOLOGY)) == static_cast<size_t>(PrimitiveTopology::Count), "Mapping is broken!");
 
+static D3D11_FILTER MapTextureFilter[TextureFilter::Count] = {
+    D3D11_FILTER_MIN_MAG_MIP_POINT,
+    D3D11_FILTER_MIN_MAG_POINT_MIP_LINEAR,
+    D3D11_FILTER_MIN_POINT_MAG_LINEAR_MIP_POINT,
+    D3D11_FILTER_MIN_POINT_MAG_MIP_LINEAR,
+    D3D11_FILTER_MIN_LINEAR_MAG_MIP_POINT,
+    D3D11_FILTER_MIN_LINEAR_MAG_POINT_MIP_LINEAR,
+    D3D11_FILTER_MIN_MAG_LINEAR_MIP_POINT,
+    D3D11_FILTER_MIN_MAG_MIP_LINEAR,
+    D3D11_FILTER_ANISOTROPIC
+};
+static_assert((sizeof(MapTextureFilter) / sizeof(D3D11_FILTER)) == static_cast<size_t>(TextureFilter::Count), "Mapping is broken!");
+
+static D3D11_TEXTURE_ADDRESS_MODE MapAddressMode[AddressMode::Count] = {
+    D3D11_TEXTURE_ADDRESS_WRAP,
+    D3D11_TEXTURE_ADDRESS_MIRROR,
+    D3D11_TEXTURE_ADDRESS_CLAMP,
+    D3D11_TEXTURE_ADDRESS_BORDER
+};
+static_assert((sizeof(MapAddressMode) / sizeof(D3D11_TEXTURE_ADDRESS_MODE)) == static_cast<size_t>(AddressMode::Count), "Mapping is broken!");
+
 static DXGI_FORMAT MapDataFormat[DataFormat::Count] = {
     DXGI_FORMAT_BC1_UNORM,     // DXT1
     DXGI_FORMAT_BC2_UNORM,     // DXT3
@@ -308,6 +329,18 @@ static void dxProcessDrawQueue(internal::DrawQueue* queue)
 
     dxSetPipelineState(queue->getState());
 
+    ID3D11SamplerState* samplerStates[internal::DrawQueue::kMaxSamplerStates] = { nullptr };
+    for (size_t i = 0; i < internal::DrawQueue::kMaxSamplerStates; ++i) {
+        ID3D11SamplerState* sampler = static_cast<ID3D11SamplerState*>(queue->samplerStates[i].value);
+        samplerStates[i] = sampler;
+    }
+
+    g_pImmediateContext->VSSetSamplers(0, internal::DrawQueue::kMaxSamplerStates, samplerStates);
+    g_pImmediateContext->HSSetSamplers(0, internal::DrawQueue::kMaxSamplerStates, samplerStates);
+    g_pImmediateContext->DSSetSamplers(0, internal::DrawQueue::kMaxSamplerStates, samplerStates);
+    g_pImmediateContext->GSSetSamplers(0, internal::DrawQueue::kMaxSamplerStates, samplerStates);
+    g_pImmediateContext->PSSetSamplers(0, internal::DrawQueue::kMaxSamplerStates, samplerStates);
+
     for (const internal::DrawCall& call: queue->getDrawCalls()) {
         DXSharedBuffer* vertexBuffer = static_cast<DXSharedBuffer*>(call.vertexBuffer.value);
         DXSharedBuffer* indexBuffer  = static_cast<DXSharedBuffer*>(call.indexBuffer.value);
@@ -315,7 +348,6 @@ static void dxProcessDrawQueue(internal::DrawQueue* queue)
 
         g_pImmediateContext->IASetPrimitiveTopology(MapPrimitiveTopology[static_cast<uint64_t>(call.primitiveTopology)]);
         if (psimpl->vertexFormat != nullptr) {
-            
             ID3D11Buffer* vbuffer = static_cast<ID3D11Buffer*>(vertexBuffer->dataBuffer);
             ID3D11Buffer* ibuffer = static_cast<ID3D11Buffer*>(indexBuffer->dataBuffer);
 
@@ -914,6 +946,42 @@ void releaseConstantBuffer(ConstantBufferHandle handle)
     }
 }
 
+SamplerStateHandle createSamplerState(const SamplerStateDescriptor& desc)
+{
+    D3D11_SAMPLER_DESC samplerDesc;
+    std::memset(&samplerDesc, 0, sizeof(samplerDesc));
+
+    samplerDesc.Filter         = MapTextureFilter[static_cast<uint32_t>(desc.filter)];
+    samplerDesc.AddressU       = MapAddressMode[static_cast<uint32_t>(desc.addressU)];
+    samplerDesc.AddressV       = MapAddressMode[static_cast<uint32_t>(desc.addressV)];
+    samplerDesc.AddressW       = MapAddressMode[static_cast<uint32_t>(desc.addressW)];
+    samplerDesc.MipLODBias     = desc.lodBias;
+    samplerDesc.MaxAnisotropy  = desc.maxAnisotropy;
+    samplerDesc.ComparisonFunc = MapComparisonFunc[static_cast<uint32_t>(desc.comparisonFunc)];
+    samplerDesc.BorderColor[0] = static_cast<float>((desc.borderColor >> 0)  & 0xFF) / 255.0F;
+    samplerDesc.BorderColor[1] = static_cast<float>((desc.borderColor >> 8)  & 0xFF) / 255.0F;
+    samplerDesc.BorderColor[2] = static_cast<float>((desc.borderColor >> 16) & 0xFF) / 255.0F;
+    samplerDesc.BorderColor[3] = static_cast<float>((desc.borderColor >> 24) & 0xFF) / 255.0F;
+    samplerDesc.MinLOD         = desc.minLod;
+    samplerDesc.MaxLOD         = desc.maxLod;
+
+    ID3D11SamplerState* sampler = nullptr;
+    if (FAILED(g_pd3dDevice->CreateSamplerState(&samplerDesc, &sampler))) {
+        // TODO: error handling
+        return SamplerStateHandle::invalidHandle();
+    }
+
+    return SamplerStateHandle(sampler);
+}
+
+void releaseSamplerState(SamplerStateHandle handle)
+{
+    if (handle != SamplerStateHandle::invalidHandle()) {
+        ID3D11SamplerState* samplerState = static_cast<ID3D11SamplerState*>(handle.value);
+        samplerState->Release();
+    }
+}
+
 Texture1DHandle createTexture1D(uint32_t width, DataFormat format, size_t numMipmaps)
 {
     D3D11_TEXTURE1D_DESC textureDesc;
@@ -1085,6 +1153,14 @@ void releaseDrawQueue(DrawQueueHandle handle)
     if (handle != DrawQueueHandle::invalidHandle()) {
         internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
         delete queue;
+    }
+}
+
+void setSamplerState(DrawQueueHandle handle, uint32_t idx, SamplerStateHandle sampler)
+{
+    if (handle != DrawQueueHandle::invalidHandle()) {
+        internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
+        queue->setSamplerState(idx, sampler);
     }
 }
 

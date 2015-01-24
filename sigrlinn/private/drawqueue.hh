@@ -77,6 +77,12 @@ private:
 
 public:
 
+    enum
+    {
+        kMaxSamplerStates = 8
+    };
+    SamplerStateHandle samplerStates[kMaxSamplerStates];
+
     DrawQueue(PipelineStateHandle _state) : state(_state) {}
 
     inline PipelineStateHandle  getState() const     { return state; }
@@ -90,6 +96,11 @@ public:
     inline void setPrimitiveTopology(PrimitiveTopology topology)     { currentDrawCall.primitiveTopology = topology; }
     inline void setVertexBuffer(BufferHandle handle)                 { currentDrawCall.vertexBuffer = handle; }
     inline void setIndexBuffer(BufferHandle handle)                  { currentDrawCall.indexBuffer  = handle; }
+
+    inline void setSamplerState(uint32_t idx, SamplerStateHandle handle)
+    {
+        samplerStates[idx] = handle;
+    }
 
     inline void setConstantBuffer(uint32_t idx, ConstantBufferHandle resource)
     {

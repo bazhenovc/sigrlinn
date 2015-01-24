@@ -205,7 +205,8 @@ struct DVPGrassManager final
     PhysicalMeshBuffer        physicalVertexBuffer;
     PhysicalMeshBuffer        physicalIndexBuffer;
 
-    sgfx::Texture2DHandle grassTexture;
+    sgfx::SamplerStateHandle samplerState;
+    sgfx::Texture2DHandle    grassTexture;
 
     sgfx::BufferHandle sharedConstantBuffer;
     size_t             numInstances = 0;
@@ -215,6 +216,23 @@ struct DVPGrassManager final
         kObjectSizeSquared = 64
     };
 
+    DVPGrassManager()
+    {
+        sgfx::SamplerStateDescriptor samplerDesc;
+        samplerDesc.filter         = sgfx::TextureFilter::MinMagMip_Linear;
+        samplerDesc.addressU       = sgfx::AddressMode::Clamp;
+        samplerDesc.addressV       = sgfx::AddressMode::Clamp;
+        samplerDesc.addressW       = sgfx::AddressMode::Clamp;
+        samplerDesc.lodBias        = 0.0F;
+        samplerDesc.maxAnisotropy  = 1;
+        samplerDesc.comparisonFunc = sgfx::ComparisonFunc::Never;
+        samplerDesc.borderColor    = 0xFFFFFFFF;
+        samplerDesc.minLod         = -3.402823466e+38F;
+        samplerDesc.maxLod         = 3.402823466e+38F;
+
+        samplerState = sgfx::createSamplerState(samplerDesc);
+    }
+
     ~DVPGrassManager()
     {
         for (MeshData* data: loadedMeshes)
@@ -222,12 +240,14 @@ struct DVPGrassManager final
         for (LogicalMesh* mesh: logicalMeshes) {
             delete mesh; // TODO: release
         }
+        sgfx::releaseSamplerState(samplerState);
         sgfx::releaseTexture(grassTexture);
         sgfx::releaseBuffer(sharedConstantBuffer);
     }
 
     void loadTexture(const std::string& path)
     {
+        sgfx::releaseTexture(grassTexture);
         grassTexture = loadDDS(path);
     }
 
@@ -316,6 +336,9 @@ struct DVPGrassManager final
             sgfx::unmapBuffer(sharedConstantBuffer);
         }
 
+        sgfx::setSamplerState(drawQueue, 0, samplerState);
+
+        // draw calls
         sgfx::setPrimitiveTopology(drawQueue, sgfx::PrimitiveTopology::TriangleList);
         sgfx::setResource(drawQueue, 0, physicalVertexBuffer.physicalBuffer);
         sgfx::setResource(drawQueue, 1, physicalIndexBuffer.physicalBuffer);
