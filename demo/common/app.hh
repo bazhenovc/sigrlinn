@@ -45,10 +45,6 @@ protected:
     ID3D11Device*        g_pd3dDevice        = NULL;
     ID3D11DeviceContext* g_pImmediateContext = NULL;
     IDXGISwapChain*      g_pSwapChain        = NULL;
-
-    ID3D11RenderTargetView* g_pRenderTargetView = NULL;
-    ID3D11Texture2D*        g_pDepthStencil     = NULL;
-    ID3D11DepthStencilView* g_pDepthStencilView = NULL;
 #endif
 
     uint32_t width = 1024;

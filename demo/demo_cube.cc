@@ -63,6 +63,10 @@ public:
     sgfx::PipelineStateHandle pipelineState;
     sgfx::DrawQueueHandle     drawQueue;
 
+    sgfx::Texture2DHandle     colorBuffer;
+    sgfx::Texture2DHandle     depthStencilBuffer;
+    sgfx::RenderTargetHandle  renderTarget;
+
 public:
 
     void* operator new(size_t size)
@@ -79,6 +83,17 @@ public:
     {
         // setup Sigrlinn
         sgfx::initD3D11(g_pd3dDevice, g_pImmediateContext, g_pSwapChain);
+
+        // create render target
+        colorBuffer        = sgfx::getBackBuffer();
+        depthStencilBuffer = sgfx::createTexture2D(width, height, sgfx::DataFormat::D24S8, 0, 0U);
+
+        sgfx::RenderTargetDescriptor renderTargetDesc;
+        renderTargetDesc.numColorTextures    = 1;
+        renderTargetDesc.colorTextures[0]    = colorBuffer;
+        renderTargetDesc.depthStencilTexture = depthStencilBuffer;
+
+        renderTarget = sgfx::createRenderTarget(renderTargetDesc);
 
         // constant buffer
         constantBuffer = sgfx::createConstantBuffer(nullptr, sizeof(ConstantBuffer));
@@ -331,6 +346,10 @@ public:
         sgfx::releasePipelineState(pipelineState);
         sgfx::releaseDrawQueue(drawQueue);
 
+        sgfx::releaseRenderTarget(renderTarget);
+        sgfx::releaseTexture(colorBuffer);
+        sgfx::releaseTexture(depthStencilBuffer);
+
         sgfx::shutdown();
     }
 
@@ -356,13 +375,21 @@ public:
         sgfx::updateConstantBuffer(constantBuffer, &constants);
 
         // actually draw some stuff
-        sgfx::setPrimitiveTopology(drawQueue, sgfx::PrimitiveTopology::TriangleList);
-        sgfx::setConstantBuffer(drawQueue, 0, constantBuffer);
-        sgfx::setVertexBuffer(drawQueue, cubeVertexBuffer);
-        sgfx::setIndexBuffer(drawQueue, cubeIndexBuffer);
-        sgfx::drawIndexed(drawQueue, 36, 0, 0);
+        {
+            sgfx::clearRenderTarget(renderTarget, 0xFFFFFFF);
+            sgfx::clearDepthStencil(renderTarget, 1.0F, 0);
+            sgfx::setRenderTarget(renderTarget);
+            sgfx::setViewport(width, height, 0.0F, 1.0F);
 
-        sgfx::submit(drawQueue);
+            sgfx::setPrimitiveTopology(drawQueue, sgfx::PrimitiveTopology::TriangleList);
+            sgfx::setConstantBuffer(drawQueue, 0, constantBuffer);
+            sgfx::setVertexBuffer(drawQueue, cubeVertexBuffer);
+            sgfx::setIndexBuffer(drawQueue, cubeIndexBuffer);
+            sgfx::drawIndexed(drawQueue, 36, 0, 0);
+
+            sgfx::submit(drawQueue);
+        }
+        sgfx::present();
     }
 };
 

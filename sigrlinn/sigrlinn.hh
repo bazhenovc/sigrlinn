@@ -63,12 +63,15 @@ typedef Handle<void*, 11> Texture2DHandle;
 typedef Handle<void*, 11> Texture3DHandle;
 typedef Handle<void*, 11> CubemapHandle;
 
+// render target
+typedef Handle<void*, 12> RenderTargetHandle;
+
 // same tag for buffers is intended
-typedef Handle<void*, 12> BufferHandle;
-typedef Handle<void*, 13> ConstantBufferHandle;
+typedef Handle<void*, 13> BufferHandle;
+typedef Handle<void*, 14> ConstantBufferHandle;
 
 // draw queue
-typedef Handle<void*, 14> DrawQueueHandle;
+typedef Handle<void*, 15> DrawQueueHandle;
 
 // buffers
 namespace BufferFlags {
@@ -90,6 +93,13 @@ enum class MapType : uint32_t
 
     Count
 };
+
+namespace TextureFlags {
+enum : uint32_t {
+    RenderTarget = (1U << 0),
+    DepthStencil = (1U << 1)
+};
+}
 
 // formats
 enum class PrimitiveTopology : uint64_t
@@ -387,6 +397,13 @@ struct SamplerStateDescriptor
     float           maxLod         = 3.402823466e+38F;
 };
 
+struct RenderTargetDescriptor
+{
+    uint32_t            numColorTextures = 0;
+    sgfx::TextureHandle colorTextures[RenderTargetSlot::Count];
+    sgfx::TextureHandle depthStencilTexture;
+};
+
 // caps
 enum class GPUCaps : uint64_t
 {
@@ -513,9 +530,9 @@ void                  releaseConstantBuffer(ConstantBufferHandle handle);
 SamplerStateHandle createSamplerState(const SamplerStateDescriptor& desc);
 void               releaseSamplerState(SamplerStateHandle handle);
 
-Texture1DHandle createTexture1D(uint32_t width, DataFormat format, size_t numMipmaps);
-Texture2DHandle createTexture2D(uint32_t width, uint32_t height, DataFormat format, size_t numMipmaps);
-Texture3DHandle createTexture3D(uint32_t width, uint32_t height, uint32_t depth, DataFormat format, size_t numMipmaps);
+Texture1DHandle createTexture1D(uint32_t width, DataFormat format, size_t numMipmaps, uint32_t flags);
+Texture2DHandle createTexture2D(uint32_t width, uint32_t height, DataFormat format, size_t numMipmaps, uint32_t flags);
+Texture3DHandle createTexture3D(uint32_t width, uint32_t height, uint32_t depth, DataFormat format, size_t numMipmaps, uint32_t flags);
 
 void            updateTexture(
     TextureHandle handle, void* mem,
@@ -526,6 +543,20 @@ void            updateTexture(
     size_t rowPitch, size_t depthPitch
 );
 void            releaseTexture(TextureHandle handle);
+
+// render targets
+Texture2DHandle    getBackBuffer();
+
+RenderTargetHandle createRenderTarget(const RenderTargetDescriptor& desc);
+void               releaseRenderTarget(RenderTargetHandle handle);
+
+void               setViewport(uint32_t width, uint32_t height, float minDepth, float maxDepth);
+
+void               setRenderTarget(RenderTargetHandle handle);
+void               clearRenderTarget(RenderTargetHandle handle, uint32_t color);
+void               clearRenderTarget(RenderTargetHandle handle, uint32_t slot, uint32_t color);
+void               clearDepthStencil(RenderTargetHandle handle, float depth, uint8_t stencil);
+void               present();
 
 // drawing
 DrawQueueHandle createDrawQueue(PipelineStateHandle state);
@@ -553,4 +584,3 @@ void            drawIndexedInstanced(DrawQueueHandle dq, uint32_t instanceCount,
 void            submit(DrawQueueHandle handle);
 
 }
-

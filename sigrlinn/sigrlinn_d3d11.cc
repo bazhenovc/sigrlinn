@@ -275,6 +275,27 @@ struct PipelineStateImpl final
     UINT                     stencilRef;
 };
 
+struct RenderTargetImpl final
+{
+    UINT                    numRenderTargets = 0;
+    ID3D11RenderTargetView* renderTargetViews[RenderTargetSlot::Count];
+    ID3D11DepthStencilView* depthStencilView = nullptr;
+
+    inline RenderTargetImpl()
+    {
+        std::memset(renderTargetViews, 0, sizeof(renderTargetViews));
+    }
+
+    inline ~RenderTargetImpl()
+    {
+        for (size_t i = 0; i < RenderTargetSlot::Count; ++i)
+            if (renderTargetViews[i] != nullptr)
+                renderTargetViews[i]->Release();
+        if (depthStencilView != nullptr)
+            depthStencilView->Release();
+    }
+};
+
 static UINT dxFormatStride(DataFormat format)
 {
     switch (format) {
@@ -982,8 +1003,15 @@ void releaseSamplerState(SamplerStateHandle handle)
     }
 }
 
-Texture1DHandle createTexture1D(uint32_t width, DataFormat format, size_t numMipmaps)
+Texture1DHandle createTexture1D(uint32_t width, DataFormat format, size_t numMipmaps, uint32_t flags)
 {
+    UINT bindFlags = D3D11_BIND_SHADER_RESOURCE;
+
+    if (flags & TextureFlags::RenderTarget)
+        bindFlags |= D3D11_BIND_RENDER_TARGET;
+    if (flags & TextureFlags::DepthStencil)
+        bindFlags |= D3D11_BIND_DEPTH_STENCIL;
+
     D3D11_TEXTURE1D_DESC textureDesc;
     std::memset(&textureDesc, 0, sizeof(textureDesc));
 
@@ -992,7 +1020,7 @@ Texture1DHandle createTexture1D(uint32_t width, DataFormat format, size_t numMip
     textureDesc.ArraySize      = 1;
     textureDesc.Format         = MapDataFormat[static_cast<uint32_t>(format)];
     textureDesc.Usage          = D3D11_USAGE_DEFAULT;
-    textureDesc.BindFlags      = D3D11_BIND_SHADER_RESOURCE;
+    textureDesc.BindFlags      = bindFlags;
     textureDesc.CPUAccessFlags = 0;
     textureDesc.MiscFlags      = 0;
 
@@ -1023,8 +1051,15 @@ Texture1DHandle createTexture1D(uint32_t width, DataFormat format, size_t numMip
     return Texture1DHandle(texture);
 }
 
-Texture2DHandle createTexture2D(uint32_t width, uint32_t height, DataFormat format, size_t numMipmaps)
+Texture2DHandle createTexture2D(uint32_t width, uint32_t height, DataFormat format, size_t numMipmaps, uint32_t flags)
 {
+    UINT bindFlags = D3D11_BIND_SHADER_RESOURCE;
+
+    if (flags & TextureFlags::RenderTarget)
+        bindFlags |= D3D11_BIND_RENDER_TARGET;
+    if (flags & TextureFlags::DepthStencil)
+        bindFlags |= D3D11_BIND_DEPTH_STENCIL;
+
     D3D11_TEXTURE2D_DESC textureDesc;
     std::memset(&textureDesc, 0, sizeof(textureDesc));
 
@@ -1034,7 +1069,7 @@ Texture2DHandle createTexture2D(uint32_t width, uint32_t height, DataFormat form
     textureDesc.ArraySize      = 1;
     textureDesc.Format         = MapDataFormat[static_cast<uint32_t>(format)];
     textureDesc.Usage          = D3D11_USAGE_DEFAULT;
-    textureDesc.BindFlags      = D3D11_BIND_SHADER_RESOURCE;
+    textureDesc.BindFlags      = bindFlags;
     textureDesc.CPUAccessFlags = 0;
     textureDesc.MiscFlags      = 0;
 
@@ -1068,8 +1103,15 @@ Texture2DHandle createTexture2D(uint32_t width, uint32_t height, DataFormat form
     return Texture1DHandle(texture);
 }
 
-Texture3DHandle createTexture3D(uint32_t width, uint32_t height, uint32_t depth, DataFormat format, size_t numMipmaps)
+Texture3DHandle createTexture3D(uint32_t width, uint32_t height, uint32_t depth, DataFormat format, size_t numMipmaps, uint32_t flags)
 {
+    UINT bindFlags = D3D11_BIND_SHADER_RESOURCE;
+
+    if (flags & TextureFlags::RenderTarget)
+        bindFlags |= D3D11_BIND_RENDER_TARGET;
+    if (flags & TextureFlags::DepthStencil)
+        bindFlags |= D3D11_BIND_DEPTH_STENCIL;
+
     D3D11_TEXTURE3D_DESC textureDesc;
     std::memset(&textureDesc, 0, sizeof(textureDesc));
 
@@ -1079,7 +1121,7 @@ Texture3DHandle createTexture3D(uint32_t width, uint32_t height, uint32_t depth,
     textureDesc.MipLevels      = numMipmaps;
     textureDesc.Format         = MapDataFormat[static_cast<uint32_t>(format)];
     textureDesc.Usage          = D3D11_USAGE_DEFAULT;
-    textureDesc.BindFlags      = D3D11_BIND_SHADER_RESOURCE;
+    textureDesc.BindFlags      = bindFlags;
     textureDesc.CPUAccessFlags = 0;
     textureDesc.MiscFlags      = 0;
 
@@ -1140,6 +1182,143 @@ void releaseTexture(TextureHandle handle)
         DXSharedBuffer* texture = static_cast<DXSharedBuffer*>(handle.value);
         delete texture;
     }
+}
+
+Texture2DHandle getBackBuffer()
+{
+    DXSharedBuffer* buffer = new DXSharedBuffer;
+    if (FAILED(g_pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), (LPVOID*)&buffer->dataBuffer))) {
+        // TODO: error handling
+        return Texture2DHandle::invalidHandle();
+    }
+
+    return Texture2DHandle(buffer);
+}
+
+RenderTargetHandle createRenderTarget(const RenderTargetDescriptor& desc)
+{
+    RenderTargetImpl* impl = new RenderTargetImpl;
+
+    impl->numRenderTargets = desc.numColorTextures;
+
+    for (uint32_t i = 0; i < desc.numColorTextures; ++i) {
+        DXSharedBuffer* textureResource = static_cast<DXSharedBuffer*>(desc.colorTextures[i].value);
+
+        D3D11_RENDER_TARGET_VIEW_DESC rtDesc;
+        std::memset(&rtDesc, 0, sizeof(rtDesc));
+
+        rtDesc.Format             = DXGI_FORMAT_UNKNOWN;
+        rtDesc.ViewDimension      = D3D11_RTV_DIMENSION_TEXTURE2D;
+        rtDesc.Texture2D.MipSlice = 0;
+
+        ID3D11RenderTargetView* renderTargetView = nullptr;
+        if (FAILED(g_pd3dDevice->CreateRenderTargetView(textureResource->dataBuffer, &rtDesc, &renderTargetView))) {
+            // TODO: error handling
+            delete impl;
+            return RenderTargetHandle::invalidHandle();
+        }
+
+        impl->renderTargetViews[i] = renderTargetView;
+    }
+
+    DXSharedBuffer* depthStencilResource = static_cast<DXSharedBuffer*>(desc.depthStencilTexture.value);
+
+    if (depthStencilResource != nullptr) {
+        D3D11_DEPTH_STENCIL_VIEW_DESC dsDesc;
+        std::memset(&dsDesc, 0, sizeof(dsDesc));
+
+        dsDesc.Format             = DXGI_FORMAT_UNKNOWN;
+        dsDesc.ViewDimension      = D3D11_DSV_DIMENSION_TEXTURE2D;
+        dsDesc.Texture2D.MipSlice = 0;
+
+        ID3D11DepthStencilView* depthStencilView = nullptr;
+        if (FAILED(g_pd3dDevice->CreateDepthStencilView(depthStencilResource->dataBuffer, &dsDesc, &depthStencilView))) {
+            // TODO: error handling
+            delete impl;
+            return RenderTargetHandle::invalidHandle();
+        }
+
+        impl->depthStencilView = depthStencilView;
+    }
+
+    return RenderTargetHandle(impl);
+}
+
+void releaseRenderTarget(RenderTargetHandle handle)
+{
+    if (handle != RenderTargetHandle::invalidHandle()) {
+        RenderTargetImpl* rtimpl = static_cast<RenderTargetImpl*>(handle.value);
+        delete rtimpl;
+    }
+}
+
+void setViewport(uint32_t width, uint32_t height, float minDepth, float maxDepth)
+{
+    D3D11_VIEWPORT vp;
+
+    vp.Width    = static_cast<float>(width);
+    vp.Height   = static_cast<float>(height);
+    vp.MinDepth = minDepth;
+    vp.MaxDepth = maxDepth;
+    vp.TopLeftX = 0;
+    vp.TopLeftY = 0;
+
+    g_pImmediateContext->RSSetViewports(1, &vp);
+}
+
+void setRenderTarget(RenderTargetHandle handle)
+{
+    if (handle != RenderTargetHandle::invalidHandle()) {
+        RenderTargetImpl* rtimpl = static_cast<RenderTargetImpl*>(handle.value);
+        g_pImmediateContext->OMSetRenderTargets(rtimpl->numRenderTargets, rtimpl->renderTargetViews, rtimpl->depthStencilView);
+    }
+}
+
+void clearRenderTarget(RenderTargetHandle handle, uint32_t color)
+{
+    if (handle != RenderTargetHandle::invalidHandle()) {
+        RenderTargetImpl* rtimpl = static_cast<RenderTargetImpl*>(handle.value);
+        float fcolor[4];
+        fcolor[0] = static_cast<float>((color >> 0)  & 0xFF) / 255.0F;
+        fcolor[1] = static_cast<float>((color >> 8)  & 0xFF) / 255.0F;
+        fcolor[2] = static_cast<float>((color >> 16) & 0xFF) / 255.0F;
+        fcolor[3] = static_cast<float>((color >> 24) & 0xFF) / 255.0F;
+
+        for (size_t i = 0; i < RenderTargetSlot::Count; ++i) {
+            if (rtimpl->renderTargetViews[i] != nullptr)
+                g_pImmediateContext->ClearRenderTargetView(rtimpl->renderTargetViews[i], fcolor);
+        }
+    }
+}
+
+void clearRenderTarget(RenderTargetHandle handle, uint32_t slot, uint32_t color)
+{
+    if (handle != RenderTargetHandle::invalidHandle()) {
+        RenderTargetImpl* rtimpl = static_cast<RenderTargetImpl*>(handle.value);
+        float fcolor[4];
+        fcolor[0] = static_cast<float>((color >> 0)  & 0xFF) / 255.0F;
+        fcolor[1] = static_cast<float>((color >> 8)  & 0xFF) / 255.0F;
+        fcolor[2] = static_cast<float>((color >> 16) & 0xFF) / 255.0F;
+        fcolor[3] = static_cast<float>((color >> 24) & 0xFF) / 255.0F;
+
+        if (rtimpl->renderTargetViews[slot] != nullptr)
+            g_pImmediateContext->ClearRenderTargetView(rtimpl->renderTargetViews[slot], fcolor);
+    }
+}
+
+void clearDepthStencil(RenderTargetHandle handle, float depth, uint8_t stencil)
+{
+    if (handle != RenderTargetHandle::invalidHandle()) {
+        RenderTargetImpl* rtimpl = static_cast<RenderTargetImpl*>(handle.value);
+
+        if (rtimpl->depthStencilView != nullptr)
+            g_pImmediateContext->ClearDepthStencilView(rtimpl->depthStencilView, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, depth, stencil);
+    }
+}
+
+void present()
+{
+    g_pSwapChain->Present(0, 0);
 }
 
 DrawQueueHandle createDrawQueue(PipelineStateHandle state)

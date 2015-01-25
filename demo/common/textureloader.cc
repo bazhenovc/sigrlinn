@@ -139,7 +139,7 @@ sgfx::Texture2DHandle loadDDS(const std::string& path)
         uint32_t blockSize = (surface.format.fourcc == DDS_FOURCC_DXT1) ? 8 : 16;
         sgfx::DataFormat format = Fourcc2DataFormat(surface.format.fourcc);
 
-        texture = sgfx::createTexture2D(surface.width, surface.height, format, surface.num_mipmaps);
+        texture = sgfx::createTexture2D(surface.width, surface.height, format, surface.num_mipmaps, 0U);
         if (texture == sgfx::TextureHandle::invalidHandle()) {
             delete [] texels;
             return sgfx::TextureHandle::invalidHandle();

@@ -359,6 +359,10 @@ public:
     sgfx::PipelineStateHandle pipelineState;
     sgfx::DrawQueueHandle     drawQueue;
 
+    sgfx::Texture2DHandle     colorBuffer;
+    sgfx::Texture2DHandle     depthStencilBuffer;
+    sgfx::RenderTargetHandle  renderTarget;
+
     DVPGrassManager*          grassManager;
 
 public:
@@ -377,6 +381,17 @@ public:
     {
         // setup Sigrlinn
         sgfx::initD3D11(g_pd3dDevice, g_pImmediateContext, g_pSwapChain);
+
+        // create render target
+        colorBuffer        = sgfx::getBackBuffer();
+        depthStencilBuffer = sgfx::createTexture2D(width, height, sgfx::DataFormat::D24S8, 0, 0U);
+
+        sgfx::RenderTargetDescriptor renderTargetDesc;
+        renderTargetDesc.numColorTextures    = 1;
+        renderTargetDesc.colorTextures[0]    = colorBuffer;
+        renderTargetDesc.depthStencilTexture = depthStencilBuffer;
+
+        renderTarget = sgfx::createRenderTarget(renderTargetDesc);
 
         // mesh data
         grassManager = new DVPGrassManager;
@@ -451,6 +466,11 @@ public:
         sgfx::releaseSurfaceShader(ssHandle);
         sgfx::releasePipelineState(pipelineState);
         sgfx::releaseDrawQueue(drawQueue);
+
+        sgfx::releaseRenderTarget(renderTarget);
+        sgfx::releaseTexture(colorBuffer);
+        sgfx::releaseTexture(depthStencilBuffer);
+
         delete grassManager;
 
         sgfx::shutdown();
@@ -485,9 +505,17 @@ public:
         glm::mat4 mvp = projection * view;
 
         // actually draw some stuff
-        grassManager->render(drawQueue, mvp);
+        {
+            sgfx::clearRenderTarget(renderTarget, 0xFFFFFFF);
+            sgfx::clearDepthStencil(renderTarget, 1.0F, 0);
+            sgfx::setRenderTarget(renderTarget);
+            sgfx::setViewport(width, height, 0.0F, 1.0F);
 
-        sgfx::submit(drawQueue);
+            grassManager->render(drawQueue, mvp);
+
+            sgfx::submit(drawQueue);
+        }
+        sgfx::present();
     }
 };
 
