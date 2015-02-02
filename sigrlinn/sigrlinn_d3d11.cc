@@ -96,15 +96,15 @@ static DXGI_FORMAT MapDataFormat[DataFormat::Count] = {
     DXGI_FORMAT_R32_SINT,
     DXGI_FORMAT_R32_UINT,
     DXGI_FORMAT_R32_FLOAT,
-    DXGI_FORMAT_R8G8_TYPELESS,
-    DXGI_FORMAT_R16G16_TYPELESS,
+    DXGI_FORMAT_R8G8_UNORM,
+    DXGI_FORMAT_R16G16_UNORM,
     DXGI_FORMAT_R16G16_FLOAT,
     DXGI_FORMAT_R32G32_TYPELESS,
     DXGI_FORMAT_R32G32_FLOAT,
     DXGI_FORMAT_R32G32B32_TYPELESS,
     DXGI_FORMAT_R32G32B32_FLOAT,
-    DXGI_FORMAT_R8G8B8A8_TYPELESS,
-    DXGI_FORMAT_R16G16B16A16_TYPELESS,
+    DXGI_FORMAT_R8G8B8A8_UNORM,
+    DXGI_FORMAT_R16G16B16A16_UNORM,
     DXGI_FORMAT_R16G16B16A16_FLOAT,
     DXGI_FORMAT_R32G32B32A32_TYPELESS,
     DXGI_FORMAT_R32G32B32A32_FLOAT,
@@ -362,6 +362,7 @@ static void dxProcessDrawQueue(internal::DrawQueue* queue)
     g_pImmediateContext->GSSetSamplers(0, internal::DrawQueue::kMaxSamplerStates, samplerStates);
     g_pImmediateContext->PSSetSamplers(0, internal::DrawQueue::kMaxSamplerStates, samplerStates);
 
+    // process draw calls
     for (const internal::DrawCall& call: queue->getDrawCalls()) {
         DXSharedBuffer* vertexBuffer = static_cast<DXSharedBuffer*>(call.vertexBuffer.value);
         DXSharedBuffer* indexBuffer  = static_cast<DXSharedBuffer*>(call.indexBuffer.value);
@@ -408,6 +409,14 @@ static void dxProcessDrawQueue(internal::DrawQueue* queue)
         case internal::DrawCall::DrawIndexedInstanced: { g_pImmediateContext->DrawIndexedInstanced(call.count, call.instanceCount, call.startIndex, call.startVertex, 0); } break;
         }
     }
+
+    // reset shader resources
+    ID3D11ShaderResourceView* shaderResources[internal::DrawCall::kMaxShaderResources] = { nullptr };
+    g_pImmediateContext->VSSetShaderResources(0, internal::DrawCall::kMaxShaderResources, shaderResources);
+    g_pImmediateContext->HSSetShaderResources(0, internal::DrawCall::kMaxShaderResources, shaderResources);
+    g_pImmediateContext->DSSetShaderResources(0, internal::DrawCall::kMaxShaderResources, shaderResources);
+    g_pImmediateContext->GSSetShaderResources(0, internal::DrawCall::kMaxShaderResources, shaderResources);
+    g_pImmediateContext->PSSetShaderResources(0, internal::DrawCall::kMaxShaderResources, shaderResources);
 }
 
 //=============================================================================
@@ -1033,9 +1042,10 @@ Texture1DHandle createTexture1D(uint32_t width, DataFormat format, size_t numMip
     D3D11_SHADER_RESOURCE_VIEW_DESC viewDesc;
     std::memset(&viewDesc, 0, sizeof(viewDesc));
 
-    viewDesc.Format              = MapDataFormat[static_cast<uint32_t>(format)];
-    viewDesc.ViewDimension       = D3D11_SRV_DIMENSION_TEXTURE1D;
-    viewDesc.Texture1D.MipLevels = numMipmaps;
+    viewDesc.Format                    = MapDataFormat[static_cast<uint32_t>(format)];
+    viewDesc.ViewDimension             = D3D11_SRV_DIMENSION_TEXTURE1D;
+    viewDesc.Texture1D.MipLevels       = numMipmaps;
+    //viewDesc.Texture1D.MostDetailedMip = -1;
 
     ID3D11ShaderResourceView* d3dResourceView = nullptr;
     if (FAILED(g_pd3dDevice->CreateShaderResourceView(d3dTexture, &viewDesc, &d3dResourceView))) {
@@ -1060,6 +1070,27 @@ Texture2DHandle createTexture2D(uint32_t width, uint32_t height, DataFormat form
     if (flags & TextureFlags::DepthStencil)
         bindFlags |= D3D11_BIND_DEPTH_STENCIL;
 
+    DXGI_FORMAT dataFormat = MapDataFormat[static_cast<uint32_t>(format)];
+
+    DXGI_FORMAT textureFormat = dataFormat;
+    DXGI_FORMAT viewFormat    = dataFormat;
+
+    if (format == DataFormat::D16) {
+        textureFormat = DXGI_FORMAT_R16_TYPELESS;
+        viewFormat    = DXGI_FORMAT_R16_UNORM;
+    }
+
+    if (format == DataFormat::D24S8) {
+        // TODO: X8 part of the texture is not accessible ATM, try to handle this properly
+        textureFormat = DXGI_FORMAT_R24G8_TYPELESS;
+        viewFormat    = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
+    }
+
+    if (format == DataFormat::D32F) {
+        textureFormat = DXGI_FORMAT_R32_TYPELESS;
+        viewFormat    = DXGI_FORMAT_R32_FLOAT;
+    }
+
     D3D11_TEXTURE2D_DESC textureDesc;
     std::memset(&textureDesc, 0, sizeof(textureDesc));
 
@@ -1067,7 +1098,7 @@ Texture2DHandle createTexture2D(uint32_t width, uint32_t height, DataFormat form
     textureDesc.Height         = height;
     textureDesc.MipLevels      = numMipmaps;
     textureDesc.ArraySize      = 1;
-    textureDesc.Format         = MapDataFormat[static_cast<uint32_t>(format)];
+    textureDesc.Format         = textureFormat;
     textureDesc.Usage          = D3D11_USAGE_DEFAULT;
     textureDesc.BindFlags      = bindFlags;
     textureDesc.CPUAccessFlags = 0;
@@ -1085,9 +1116,10 @@ Texture2DHandle createTexture2D(uint32_t width, uint32_t height, DataFormat form
     D3D11_SHADER_RESOURCE_VIEW_DESC viewDesc;
     std::memset(&viewDesc, 0, sizeof(viewDesc));
 
-    viewDesc.Format              = MapDataFormat[static_cast<uint32_t>(format)];
-    viewDesc.ViewDimension       = D3D11_SRV_DIMENSION_TEXTURE2D;
-    viewDesc.Texture2D.MipLevels = numMipmaps;
+    viewDesc.Format                    = viewFormat;
+    viewDesc.ViewDimension             = D3D11_SRV_DIMENSION_TEXTURE2D;
+    viewDesc.Texture2D.MipLevels       = numMipmaps;
+    //viewDesc.Texture2D.MostDetailedMip = -1;
 
     ID3D11ShaderResourceView* d3dResourceView = nullptr;
     if (FAILED(g_pd3dDevice->CreateShaderResourceView(d3dTexture, &viewDesc, &d3dResourceView))) {
@@ -1134,9 +1166,10 @@ Texture3DHandle createTexture3D(uint32_t width, uint32_t height, uint32_t depth,
     D3D11_SHADER_RESOURCE_VIEW_DESC viewDesc;
     std::memset(&viewDesc, 0, sizeof(viewDesc));
 
-    viewDesc.Format              = MapDataFormat[static_cast<uint32_t>(format)];
-    viewDesc.ViewDimension       = D3D11_SRV_DIMENSION_TEXTURE3D;
-    viewDesc.Texture3D.MipLevels = numMipmaps;
+    viewDesc.Format                    = MapDataFormat[static_cast<uint32_t>(format)];
+    viewDesc.ViewDimension             = D3D11_SRV_DIMENSION_TEXTURE3D;
+    viewDesc.Texture3D.MipLevels       = numMipmaps;
+    //viewDesc.Texture3D.MostDetailedMip = -1;
 
     ID3D11ShaderResourceView* d3dResourceView = nullptr;
     if (FAILED(g_pd3dDevice->CreateShaderResourceView(d3dTexture, &viewDesc, &d3dResourceView))) {
@@ -1227,7 +1260,18 @@ RenderTargetHandle createRenderTarget(const RenderTargetDescriptor& desc)
         D3D11_DEPTH_STENCIL_VIEW_DESC dsDesc;
         std::memset(&dsDesc, 0, sizeof(dsDesc));
 
-        dsDesc.Format             = DXGI_FORMAT_UNKNOWN;
+        D3D11_SHADER_RESOURCE_VIEW_DESC depthTextureDesc;
+        depthStencilResource->dataView->GetDesc(&depthTextureDesc);
+
+        DXGI_FORMAT depthFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
+        switch (depthTextureDesc.Format) {
+        case DXGI_FORMAT_R16_UNORM:             { depthFormat = DXGI_FORMAT_D16_UNORM; } break;
+        case DXGI_FORMAT_R24_UNORM_X8_TYPELESS: { depthFormat = DXGI_FORMAT_D24_UNORM_S8_UINT; } break;
+        case DXGI_FORMAT_R32_FLOAT:             { depthFormat = DXGI_FORMAT_D32_FLOAT; } break;
+        default: {} break;
+        }
+
+        dsDesc.Format             = depthFormat;
         dsDesc.ViewDimension      = D3D11_DSV_DIMENSION_TEXTURE2D;
         dsDesc.Texture2D.MipSlice = 0;
 
@@ -1270,6 +1314,11 @@ void setRenderTarget(RenderTargetHandle handle)
 {
     if (handle != RenderTargetHandle::invalidHandle()) {
         RenderTargetImpl* rtimpl = static_cast<RenderTargetImpl*>(handle.value);
+
+        // reset previous RTs
+        ID3D11RenderTargetView* rtViews[RenderTargetSlot::Count] = { nullptr };
+        g_pImmediateContext->OMSetRenderTargets(RenderTargetSlot::Count, rtViews, nullptr);
+
         g_pImmediateContext->OMSetRenderTargets(rtimpl->numRenderTargets, rtimpl->renderTargetViews, rtimpl->depthStencilView);
     }
 }

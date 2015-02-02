@@ -86,7 +86,9 @@ public:
 
         // create render target
         colorBuffer        = sgfx::getBackBuffer();
-        depthStencilBuffer = sgfx::createTexture2D(width, height, sgfx::DataFormat::D24S8, 0, 0U);
+        depthStencilBuffer = sgfx::createTexture2D(
+            width, height, sgfx::DataFormat::D24S8, 1, sgfx::TextureFlags::DepthStencil
+        );
 
         sgfx::RenderTargetDescriptor renderTargetDesc;
         renderTargetDesc.numColorTextures    = 1;

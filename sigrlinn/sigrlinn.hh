@@ -188,7 +188,7 @@ enum class DataFormat : uint32_t
 };
 
 inline bool isCompressedFormat(DataFormat format) { return format < DataFormat::UnknownCompressed; }
-inline bool isDepthFormat(DataFormat format)      { return format < DataFormat::UnknownDepth;      }
+inline bool isDepthFormat(DataFormat format)      { return format > DataFormat::UnknownDepth;      }
 
 // render state
 enum class FillMode : uint64_t

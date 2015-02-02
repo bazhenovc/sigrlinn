@@ -52,6 +52,7 @@ protected:
 
     static void genericErrorReporter(const char* msg);
 
+public:
     bool loadShader(const char* path, sgfx::ShaderCompileTarget target, void*& outData, size_t& outSize);
     sgfx::VertexShaderHandle   loadVS(const char* path);
     sgfx::GeometryShaderHandle loadGS(const char* path);
@@ -59,8 +60,6 @@ protected:
     sgfx::ComputeShaderHandle  loadCS(const char* path);
 
     sgfx::VertexFormatHandle   loadVF(sgfx::VertexElementDescriptor* vfElements, size_t vfElementsSize, const char* shaderPath);
-
-public:
 
 #ifdef APP_WIN32
     HRESULT initWindow(HINSTANCE hInstance, int nCmdShow);
