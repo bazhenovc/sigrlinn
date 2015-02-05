@@ -517,13 +517,13 @@ PipelineStateHandle   createPipelineState(const PipelineStateDescriptor& desc);
 void                  releasePipelineState(PipelineStateHandle handle);
 
 // buffers
-BufferHandle          createBuffer(uint32_t flags, void* mem, size_t size, size_t stride);
+BufferHandle          createBuffer(uint32_t flags, const void* mem, size_t size, size_t stride);
 void                  releaseBuffer(BufferHandle handle); // use this to release all kinds of buffers
 void*                 mapBuffer(BufferHandle handle, MapType type);
 void                  unmapBuffer(BufferHandle handle);
 
-ConstantBufferHandle  createConstantBuffer(void* mem, size_t size);
-void                  updateConstantBuffer(ConstantBufferHandle handle, void* mem);
+ConstantBufferHandle  createConstantBuffer(const void* mem, size_t size);
+void                  updateConstantBuffer(ConstantBufferHandle handle, const void* mem);
 void                  releaseConstantBuffer(ConstantBufferHandle handle);
 
 // textures
@@ -535,7 +535,7 @@ Texture2DHandle createTexture2D(uint32_t width, uint32_t height, DataFormat form
 Texture3DHandle createTexture3D(uint32_t width, uint32_t height, uint32_t depth, DataFormat format, size_t numMipmaps, uint32_t flags);
 
 void            updateTexture(
-    TextureHandle handle, void* mem,
+    TextureHandle handle, const void* mem,
     uint32_t mip,
     size_t offsetX,  size_t sizeX,
     size_t offsetY,  size_t sizeY,

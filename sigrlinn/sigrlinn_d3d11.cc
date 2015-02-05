@@ -834,7 +834,7 @@ void releasePipelineState(PipelineStateHandle handle)
     }
 }
 
-BufferHandle createBuffer(uint32_t flags, void* mem, size_t size, size_t stride)
+BufferHandle createBuffer(uint32_t flags, const void* mem, size_t size, size_t stride)
 {
     D3D11_USAGE bufferUsage    = D3D11_USAGE_IMMUTABLE;
     UINT        bufferCPUFlags = 0;
@@ -934,7 +934,7 @@ void unmapBuffer(BufferHandle handle)
     }
 }
 
-ConstantBufferHandle createConstantBuffer(void* mem, size_t size)
+ConstantBufferHandle createConstantBuffer(const void* mem, size_t size)
 {
     D3D11_BUFFER_DESC bufferDesc;
     std::memset(&bufferDesc, 0, sizeof(bufferDesc));
@@ -959,7 +959,7 @@ ConstantBufferHandle createConstantBuffer(void* mem, size_t size)
     return ConstantBufferHandle(buffer);
 }
 
-void updateConstantBuffer(ConstantBufferHandle handle, void* mem)
+void updateConstantBuffer(ConstantBufferHandle handle, const void* mem)
 {
     if (handle != ConstantBufferHandle::invalidHandle()) {
         ID3D11Buffer* buffer = static_cast<ID3D11Buffer*>(handle.value);
@@ -1186,7 +1186,7 @@ Texture3DHandle createTexture3D(uint32_t width, uint32_t height, uint32_t depth,
 }
 
 void updateTexture(
-    TextureHandle handle, void* mem,
+    TextureHandle handle, const void* mem,
     uint32_t mip,
     size_t offsetX,  size_t sizeX,
     size_t offsetY,  size_t sizeY,
