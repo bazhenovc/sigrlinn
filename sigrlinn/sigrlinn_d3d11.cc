@@ -370,11 +370,16 @@ static void dxProcessDrawQueue(internal::DrawQueue* queue)
 
         g_pImmediateContext->IASetPrimitiveTopology(MapPrimitiveTopology[static_cast<uint64_t>(call.primitiveTopology)]);
         if (psimpl->vertexFormat != nullptr) {
-            ID3D11Buffer* vbuffer = static_cast<ID3D11Buffer*>(vertexBuffer->dataBuffer);
-            ID3D11Buffer* ibuffer = static_cast<ID3D11Buffer*>(indexBuffer->dataBuffer);
+            ID3D11Buffer* vbuffer = nullptr;
+            if (vertexBuffer != nullptr)
+                vbuffer = static_cast<ID3D11Buffer*>(vertexBuffer->dataBuffer);
+
+            ID3D11Buffer* ibuffer = nullptr;
+            if (indexBuffer != nullptr)
+                ibuffer = static_cast<ID3D11Buffer*>(indexBuffer->dataBuffer);
 
             g_pImmediateContext->IASetVertexBuffers(0, 1, &vbuffer, &psimpl->vertexFormat->stride, &offset);
-            g_pImmediateContext->IASetIndexBuffer(ibuffer, DXGI_FORMAT_R32_UINT, 0);
+            g_pImmediateContext->IASetIndexBuffer(ibuffer, DXGI_FORMAT_R32_UINT, 0); // TODO: different index format
         }
 
         // constant buffers are ID3D11Buffers effectively
@@ -470,7 +475,7 @@ bool compileShader(
     ID3DBlob* outBlob   = nullptr;
     ID3DBlob* errorBlob = nullptr;
 
-    UINT d3dFlags           = 0;
+    UINT d3dFlags = 0;
     if (flags & static_cast<UINT>(ShaderCompileFlags::Debug))     d3dFlags |= D3DCOMPILE_DEBUG;
     if (flags & static_cast<UINT>(ShaderCompileFlags::Strict))    d3dFlags |= D3DCOMPILE_ENABLE_STRICTNESS;
     if (flags & static_cast<UINT>(ShaderCompileFlags::IEEStrict)) d3dFlags |= D3DCOMPILE_IEEE_STRICTNESS;

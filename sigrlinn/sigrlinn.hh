@@ -450,16 +450,17 @@ struct ShaderCompileMacro
     const char* value;
 };
 
-enum class ShaderCompileFlags : uint64_t
-{
-    Debug     = 1 << 0,
-    Strict    = 1 << 1,
-    IEEStrict = 1 << 2,
-    Optimize0 = 1 << 3,
-    Optimize1 = 1 << 4,
-    Optimize2 = 1 << 5,
-    Optimize3 = 1 << 6
+namespace ShaderCompileFlags {
+enum : uint64_t {
+    Debug     = (1UL << 0),
+    Strict    = (1UL << 1),
+    IEEStrict = (1UL << 2),
+    Optimize0 = (1UL << 3),
+    Optimize1 = (1UL << 4),
+    Optimize2 = (1UL << 5),
+    Optimize3 = (1UL << 6)
 };
+}
 
 bool compileShader(
     const char*          sourceCode,
