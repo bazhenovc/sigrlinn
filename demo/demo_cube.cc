@@ -296,7 +296,7 @@ public:
             desc.rasterizerState.counterDirection                   = sgfx::CounterDirection::CW;
 
             desc.blendState.blendDesc.blendEnabled                  = false;
-            desc.blendState.blendDesc.writeMask                     = sgfx::ColorWriteMask::All; // not implemented
+            desc.blendState.blendDesc.writeMask                     = sgfx::ColorWriteMask::All;
             desc.blendState.blendDesc.srcBlend                      = sgfx::BlendFactor::One;
             desc.blendState.blendDesc.dstBlend                      = sgfx::BlendFactor::Zero;
             desc.blendState.blendDesc.blendOp                       = sgfx::BlendOp::Add;
@@ -360,8 +360,8 @@ public:
         // Update our time
         static float t = 0.0f;
 
-        static DWORD dwTimeStart = 0;
-        DWORD dwTimeCur = GetTickCount();
+        static ULONGLONG dwTimeStart = 0;
+        ULONGLONG dwTimeCur = GetTickCount64();
         if (dwTimeStart == 0)
             dwTimeStart = dwTimeCur;
         t = (dwTimeCur - dwTimeStart) / 1000.0f;

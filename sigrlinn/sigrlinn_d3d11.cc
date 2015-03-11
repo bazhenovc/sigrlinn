@@ -525,14 +525,14 @@ bool compileShader(
     );
 
     if (FAILED(hr)) {
-        if (errorReport != nullptr) {
+        if (errorReport != nullptr && errorBlob != nullptr) {
             char* error = new char[errorBlob->GetBufferSize() + 1];
             std::memcpy(error, errorBlob->GetBufferPointer(), errorBlob->GetBufferSize());
             error[errorBlob->GetBufferSize()] = '\0';
             errorReport(error);
             delete [] error;
         }
-        errorBlob->Release();
+        if (errorBlob != nullptr) errorBlob->Release();
         return false;
     }
 
@@ -762,7 +762,7 @@ PipelineStateHandle createPipelineState(const PipelineStateDescriptor& desc)
 
     //if (bsState.blendDesc.blendEnabled) {
         blendDesc.RenderTarget[0].BlendEnable           = bsState.blendDesc.blendEnabled;
-        blendDesc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+        blendDesc.RenderTarget[0].RenderTargetWriteMask = static_cast<UINT8>(bsState.renderTargetBlendDesc[0].writeMask);
         blendDesc.RenderTarget[0].SrcBlend              = MapBlendFactor[static_cast<uint64_t>(bsState.blendDesc.srcBlend)];
         blendDesc.RenderTarget[0].DestBlend             = MapBlendFactor[static_cast<uint64_t>(bsState.blendDesc.dstBlend)];
         blendDesc.RenderTarget[0].BlendOp               = MapBlendOp[static_cast<uint64_t>(bsState.blendDesc.blendOp)];
@@ -774,7 +774,7 @@ PipelineStateHandle createPipelineState(const PipelineStateDescriptor& desc)
     if (bsState.separateBlendEnabled) {
         for (size_t i = 0; i < 8; ++i) {
             blendDesc.RenderTarget[i].BlendEnable           = bsState.renderTargetBlendDesc[i].blendEnabled;
-            blendDesc.RenderTarget[i].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+            blendDesc.RenderTarget[i].RenderTargetWriteMask = static_cast<UINT8>(bsState.renderTargetBlendDesc[i].writeMask);
             blendDesc.RenderTarget[i].SrcBlend              = MapBlendFactor[static_cast<uint64_t>(bsState.renderTargetBlendDesc[i].srcBlend)];
             blendDesc.RenderTarget[i].DestBlend             = MapBlendFactor[static_cast<uint64_t>(bsState.renderTargetBlendDesc[i].dstBlend)];
             blendDesc.RenderTarget[i].BlendOp               = MapBlendOp[static_cast<uint64_t>(bsState.renderTargetBlendDesc[i].blendOp)];

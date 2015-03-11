@@ -257,7 +257,7 @@ public:
             desc.rasterizerState.counterDirection = sgfx::CounterDirection::CW;
 
             desc.blendState.blendDesc.blendEnabled = false;
-            desc.blendState.blendDesc.writeMask = sgfx::ColorWriteMask::All; // not implemented
+            desc.blendState.blendDesc.writeMask = sgfx::ColorWriteMask::All;
             desc.blendState.blendDesc.srcBlend = sgfx::BlendFactor::One;
             desc.blendState.blendDesc.dstBlend = sgfx::BlendFactor::Zero;
             desc.blendState.blendDesc.blendOp = sgfx::BlendOp::Add;
@@ -303,7 +303,7 @@ public:
             desc.rasterizerState.counterDirection = sgfx::CounterDirection::CW;
 
             desc.blendState.blendDesc.blendEnabled = false;
-            desc.blendState.blendDesc.writeMask = sgfx::ColorWriteMask::All; // not implemented
+            desc.blendState.blendDesc.writeMask = sgfx::ColorWriteMask::All;
             desc.blendState.blendDesc.srcBlend = sgfx::BlendFactor::One;
             desc.blendState.blendDesc.dstBlend = sgfx::BlendFactor::Zero;
             desc.blendState.blendDesc.blendOp = sgfx::BlendOp::Add;

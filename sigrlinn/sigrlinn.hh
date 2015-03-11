@@ -243,30 +243,22 @@ enum class BlendOp : uint64_t
     Count
 };
 
-enum RenderTargetSlot :uint64_t
-{
-    Color0,
-    Color1,
-    Color2,
-    Color3,
-    Color4,
-    Color5,
-    Color6,
-    Color7,
+namespace RenderTargetSlot {
+enum {
+    Count = 8
+};
+}
 
-    Count
+enum class ColorWriteMask : uint8_t
+{
+    Red   = (1U << 0),
+    Green = (1U << 1),
+    Blue  = (1U << 2),
+    Alpha = (1U << 3),
+
+    All   = Red | Green | Blue | Alpha
 };
 
-enum class ColorWriteMask : uint8_t // unsupported
-{
-    Red,
-    Green,
-    Blue,
-    Alpha,
-    All,
-
-    Count
-};
 
 enum class DepthWriteMask : uint64_t
 {
@@ -314,7 +306,7 @@ struct RasterizerState
 struct BlendDesc
 {
     bool           blendEnabled  = false;
-    ColorWriteMask writeMask     = ColorWriteMask::All; // not implemented
+    ColorWriteMask writeMask     = ColorWriteMask::All;
     BlendFactor    srcBlend      = BlendFactor::One;
     BlendFactor    dstBlend      = BlendFactor::Zero;
     BlendOp        blendOp       = BlendOp::Add;
