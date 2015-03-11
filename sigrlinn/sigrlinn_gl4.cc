@@ -25,6 +25,8 @@
 #include "GL/glew.h"
 #include <memory>
 
+#include "private/drawqueue.hh"
+
 #pragma comment(lib, "opengl32.lib")
 
 namespace sgfx
@@ -105,13 +107,16 @@ static GLenum MapDataFormat[DataFormat::Count] = {
     GL_RG16,
     GL_RG16F,
     GL_RG32I,
+    GL_RG32UI,
     GL_RG32F,
     GL_RGB32I,
+    GL_RGB32UI,
     GL_RGB32F,
     GL_RGBA8,
     GL_RGBA16,
     GL_RGBA16F,
     GL_RGBA32I,
+    GL_RGBA32UI,
     GL_RGBA32F,
     GL_R11F_G11F_B10F,
 
@@ -232,9 +237,102 @@ struct GLVertexFormatImpl final // VF is a VAO with bound attribs
     inline ~GLVertexFormatImpl() { glDeleteVertexArrays(1, &vaoID); }
 };
 
+struct GLTextureImpl final
+{
+    GLuint textureID = 0;
+
+    uint32_t numDimensions    = 0; // 1, 2 or 3
+    GLenum   glInternalFormat = 0;
+    GLenum   glType           = 0;
+
+    inline GLTextureImpl()  { glGenTextures(1, &textureID); }
+    inline ~GLTextureImpl() { glDeleteTextures(1, &textureID); }
+};
+
 //-------------------------------------------------------------------------------------------------
 
-void GL_setPipelineState(PipelineStateHandle handle)
+static inline GLenum GL_getInternalFormat(DataFormat format)
+{
+    switch (format) {
+    case DataFormat::BC1:        { return GL_RGB; } break;
+    case DataFormat::BC2:        { return GL_RGBA; } break;
+    case DataFormat::BC3:        { return GL_RGBA; } break;
+    case DataFormat::BC4:        { return GL_LUMINANCE; } break;
+    case DataFormat::BC5:        { return GL_LUMINANCE_ALPHA; } break;
+    case DataFormat::BC6H:       { return GL_RGB; } break;
+    case DataFormat::BC7:        { return GL_RGBA; } break;
+
+    case DataFormat::R1:
+    case DataFormat::R8:
+    case DataFormat::R16:
+    case DataFormat::R16F:       { GL_RED; } break;
+
+    case DataFormat::R32I:
+    case DataFormat::R32U:       { return GL_RED_INTEGER; } break;
+
+    case DataFormat::RG8:
+    case DataFormat::RG16:
+    case DataFormat::RG16F:
+    case DataFormat::RG32F:      { return GL_RG; } break;
+
+    case DataFormat::RG32I:
+    case DataFormat::RG32U:      { return GL_RG_INTEGER; } break;
+
+    case DataFormat::RGB32F:     { return GL_RGB; } break;
+
+    case DataFormat::RGB32I:
+    case DataFormat::RGB32U:     { return GL_RGB_INTEGER; } break;
+
+    case DataFormat::RGBA8:
+    case DataFormat::RGBA16:
+    case DataFormat::RGBA16F:
+    case DataFormat::RGBA32F:    { return GL_RGBA; } break;
+    
+    case DataFormat::RGBA32I:
+    case DataFormat::RGBA32U:    { return GL_RGBA_INTEGER; } break;
+
+    case DataFormat::R11G11B10F: { return GL_RGB; } break;
+
+    case DataFormat::D16:
+    case DataFormat::D32F:       { return GL_DEPTH_COMPONENT; } break;
+    
+    case DataFormat::D24S8:      { return GL_DEPTH24_STENCIL8; } break;
+
+    default: { return 0; } break;
+    };
+    return 0; // make compiler happy
+}
+
+static inline GLenum GL_getInternalType(DataFormat format)
+{
+    switch (format) {
+    case DataFormat::BC6H:
+    case DataFormat::R16F:
+    case DataFormat::R32F:
+    case DataFormat::RG16F:
+    case DataFormat::RG32F:
+    case DataFormat::RGB32F:
+    case DataFormat::RGBA16F:
+    case DataFormat::RGBA32F:
+    case DataFormat::R11G11B10F:
+    case DataFormat::D32F:       { return GL_FLOAT; } break;
+
+    case DataFormat::R32I:
+    case DataFormat::RG32I:
+    case DataFormat::RGB32I:
+    case DataFormat::RGBA32I:    { return GL_INT; } break;
+
+    case DataFormat::R32U:
+    case DataFormat::RG32U:
+    case DataFormat::RGB32U:
+    case DataFormat::RGBA32U:    { return GL_UNSIGNED_INT; } break;
+
+    default:                     { return GL_UNSIGNED_BYTE; } break;
+    };
+    return 0;
+}
+
+static void GL_setPipelineState(PipelineStateHandle handle)
 {
     if (handle != PipelineStateHandle::invalidHandle()) {
         PipelineStateDescriptor* state = static_cast<PipelineStateDescriptor*>(handle.value);
@@ -243,8 +341,8 @@ void GL_setPipelineState(PipelineStateHandle handle)
         const RasterizerState& rs = state->rasterizerState;
         glPolygonMode(GL_FRONT_AND_BACK, MapFillMode[static_cast<uint32_t>(rs.fillMode)]);
         glEnable(GL_CULL_FACE);
-        glCullFace(MapCullMode[static_cast<uint32_t>(rs.cullMode)]);
-        glFrontFace(MapCounterDirection[static_cast<uint32_t>(rs.counterDirection)]);
+        glCullFace(MapCullMode[static_cast<size_t>(rs.cullMode)]);
+        glFrontFace(MapCounterDirection[static_cast<size_t>(rs.counterDirection)]);
 
         // blend state
         const BlendState& bs = state->blendState;
@@ -263,14 +361,14 @@ void GL_setPipelineState(PipelineStateHandle handle)
                 colorMask & static_cast<uint8_t>(ColorWriteMask::Alpha)
             );
             glBlendFuncSeparate(
-                MapBlendFactor[static_cast<uint32_t>(bs.blendDesc.srcBlend)],
-                MapBlendFactor[static_cast<uint32_t>(bs.blendDesc.dstBlend)],
-                MapBlendFactor[static_cast<uint32_t>(bs.blendDesc.srcBlendAlpha)],
-                MapBlendFactor[static_cast<uint32_t>(bs.blendDesc.dstBlendAlpha)]
+                MapBlendFactor[static_cast<size_t>(bs.blendDesc.srcBlend)],
+                MapBlendFactor[static_cast<size_t>(bs.blendDesc.dstBlend)],
+                MapBlendFactor[static_cast<size_t>(bs.blendDesc.srcBlendAlpha)],
+                MapBlendFactor[static_cast<size_t>(bs.blendDesc.dstBlendAlpha)]
             );
             glBlendEquationSeparate(
-                MapBlendOp[static_cast<uint32_t>(bs.blendDesc.blendOp)],
-                MapBlendOp[static_cast<uint32_t>(bs.blendDesc.blendOpAlpha)]
+                MapBlendOp[static_cast<size_t>(bs.blendDesc.blendOp)],
+                MapBlendOp[static_cast<size_t>(bs.blendDesc.blendOpAlpha)]
             );
         }
 
@@ -286,15 +384,15 @@ void GL_setPipelineState(PipelineStateHandle handle)
                 );
                 glBlendFuncSeparatei(
                     i,
-                    MapBlendFactor[static_cast<uint32_t>(bs.renderTargetBlendDesc[i].srcBlend)],
-                    MapBlendFactor[static_cast<uint32_t>(bs.renderTargetBlendDesc[i].dstBlend)],
-                    MapBlendFactor[static_cast<uint32_t>(bs.renderTargetBlendDesc[i].srcBlendAlpha)],
-                    MapBlendFactor[static_cast<uint32_t>(bs.renderTargetBlendDesc[i].dstBlendAlpha)]
+                    MapBlendFactor[static_cast<size_t>(bs.renderTargetBlendDesc[i].srcBlend)],
+                    MapBlendFactor[static_cast<size_t>(bs.renderTargetBlendDesc[i].dstBlend)],
+                    MapBlendFactor[static_cast<size_t>(bs.renderTargetBlendDesc[i].srcBlendAlpha)],
+                    MapBlendFactor[static_cast<size_t>(bs.renderTargetBlendDesc[i].dstBlendAlpha)]
                 );
                 glBlendEquationSeparatei(
                     i,
-                    MapBlendOp[static_cast<uint32_t>(bs.renderTargetBlendDesc[i].blendOp)],
-                    MapBlendOp[static_cast<uint32_t>(bs.renderTargetBlendDesc[i].blendOpAlpha)]
+                    MapBlendOp[static_cast<size_t>(bs.renderTargetBlendDesc[i].blendOp)],
+                    MapBlendOp[static_cast<size_t>(bs.renderTargetBlendDesc[i].blendOpAlpha)]
                 );
             }
         }
@@ -309,8 +407,8 @@ void GL_setPipelineState(PipelineStateHandle handle)
 
         if (ds.depthEnabled) {
             glEnable(GL_DEPTH_TEST);
-            glDepthFunc(MapComparisonFunc[static_cast<uint32_t>(ds.depthFunc)]);
-            glDepthMask(MapDepthWriteMask[static_cast<uint32_t>(ds.writeMask)]);
+            glDepthFunc(MapComparisonFunc[static_cast<size_t>(ds.depthFunc)]);
+            glDepthMask(MapDepthWriteMask[static_cast<size_t>(ds.writeMask)]);
         } else {
             glDisable(GL_DEPTH_TEST);
         }
@@ -320,32 +418,37 @@ void GL_setPipelineState(PipelineStateHandle handle)
             glStencilMask(ds.stencilWriteMask);
             glStencilFuncSeparate(
                 GL_FRONT,
-                MapComparisonFunc[static_cast<uint32_t>(ds.frontFaceStencilDesc.stencilFunc)],
+                MapComparisonFunc[static_cast<size_t>(ds.frontFaceStencilDesc.stencilFunc)],
                 ds.stencilRef,
                 0xFF
             );
             glStencilFuncSeparate(
                 GL_BACK,
-                MapComparisonFunc[static_cast<uint32_t>(ds.backFaceStencilDesc.stencilFunc)],
+                MapComparisonFunc[static_cast<size_t>(ds.backFaceStencilDesc.stencilFunc)],
                 ds.stencilRef,
                 0xFF
             );
             glStencilOpSeparate(
                 GL_FRONT,
-                MapStencilOp[static_cast<uint32_t>(ds.frontFaceStencilDesc.failOp)],
-                MapStencilOp[static_cast<uint32_t>(ds.frontFaceStencilDesc.depthFailOp)],
-                MapStencilOp[static_cast<uint32_t>(ds.frontFaceStencilDesc.passOp)]
+                MapStencilOp[static_cast<size_t>(ds.frontFaceStencilDesc.failOp)],
+                MapStencilOp[static_cast<size_t>(ds.frontFaceStencilDesc.depthFailOp)],
+                MapStencilOp[static_cast<size_t>(ds.frontFaceStencilDesc.passOp)]
             );
             glStencilOpSeparate(
                 GL_BACK,
-                MapStencilOp[static_cast<uint32_t>(ds.backFaceStencilDesc.failOp)],
-                MapStencilOp[static_cast<uint32_t>(ds.backFaceStencilDesc.depthFailOp)],
-                MapStencilOp[static_cast<uint32_t>(ds.backFaceStencilDesc.passOp)]
+                MapStencilOp[static_cast<size_t>(ds.backFaceStencilDesc.failOp)],
+                MapStencilOp[static_cast<size_t>(ds.backFaceStencilDesc.depthFailOp)],
+                MapStencilOp[static_cast<size_t>(ds.backFaceStencilDesc.passOp)]
             );
         } else {
             glDisable(GL_STENCIL_TEST);
         }
     }
+}
+
+static void GL_processDrawQueue(internal::DrawQueue* queue)
+{
+    // TODO: implement me!
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -537,12 +640,12 @@ SamplerStateHandle createSamplerState_GL(const SamplerStateDescriptor& desc)
     // init sampler
     glSamplerParameteri (impl->samplerID, GL_TEXTURE_MIN_FILTER, filterImpl.min);
     glSamplerParameteri (impl->samplerID, GL_TEXTURE_MAG_FILTER, filterImpl.mag);
-    glSamplerParameteri (impl->samplerID, GL_TEXTURE_WRAP_S, MapAddressMode[static_cast<uint64_t>(desc.addressU)]);
-    glSamplerParameteri (impl->samplerID, GL_TEXTURE_WRAP_T, MapAddressMode[static_cast<uint64_t>(desc.addressV)]);
-    glSamplerParameteri (impl->samplerID, GL_TEXTURE_WRAP_R, MapAddressMode[static_cast<uint64_t>(desc.addressW)]);
+    glSamplerParameteri (impl->samplerID, GL_TEXTURE_WRAP_S, MapAddressMode[static_cast<size_t>(desc.addressU)]);
+    glSamplerParameteri (impl->samplerID, GL_TEXTURE_WRAP_T, MapAddressMode[static_cast<size_t>(desc.addressV)]);
+    glSamplerParameteri (impl->samplerID, GL_TEXTURE_WRAP_R, MapAddressMode[static_cast<size_t>(desc.addressW)]);
     glSamplerParameterf (impl->samplerID, GL_TEXTURE_LOD_BIAS, desc.lodBias);
     glSamplerParameteri (impl->samplerID, GL_TEXTURE_MAX_ANISOTROPY_EXT, desc.maxAnisotropy);
-    glSamplerParameteri (impl->samplerID, GL_TEXTURE_COMPARE_MODE, MapComparisonFunc[static_cast<uint64_t>(desc.comparisonFunc)]);
+    glSamplerParameteri (impl->samplerID, GL_TEXTURE_COMPARE_MODE, MapComparisonFunc[static_cast<size_t>(desc.comparisonFunc)]);
     glSamplerParameterfv(impl->samplerID, GL_TEXTURE_BORDER_COLOR, fcolor);
     glSamplerParameterf (impl->samplerID, GL_TEXTURE_MIN_LOD, desc.minLod);
     glSamplerParameterf (impl->samplerID, GL_TEXTURE_MAX_LOD, desc.maxLod);
@@ -555,6 +658,237 @@ void releaseSamplerState_GL(SamplerStateHandle handle)
     if (handle != SamplerStateHandle::invalidHandle()) {
         GLSamplerStateImpl* impl = static_cast<GLSamplerStateImpl*>(handle.value);
         delete impl;
+    }
+}
+
+Texture1DHandle createTexture1D_GL(uint32_t width, DataFormat format, uint32_t numMipmaps, uint32_t flags)
+{
+    GLTextureImpl* impl = new GLTextureImpl;
+    impl->numDimensions    = 1;
+    impl->glInternalFormat = GL_getInternalFormat(format);
+    impl->glType           = GL_getInternalType(format);
+
+    glTextureStorage1DEXT(
+        impl->textureID,
+        GL_TEXTURE_1D,
+        numMipmaps,
+        MapDataFormat[static_cast<size_t>(format)],
+        width
+    );
+
+    return Texture1DHandle(impl);
+}
+
+Texture2DHandle createTexture2D_GL(uint32_t width, uint32_t height, DataFormat format, uint32_t numMipmaps, uint32_t flags)
+{
+    GLTextureImpl* impl = new GLTextureImpl;
+    impl->numDimensions    = 2;
+    impl->glInternalFormat = GL_getInternalFormat(format);
+    impl->glType           = GL_getInternalType(format);
+
+    glTextureStorage2DEXT(
+        impl->textureID,
+        GL_TEXTURE_2D,
+        numMipmaps,
+        MapDataFormat[static_cast<size_t>(format)],
+        width,
+        height
+    );
+
+    return Texture2DHandle(impl);
+}
+
+Texture3DHandle createTexture3D_GL(uint32_t width, uint32_t height, uint32_t depth, DataFormat format, uint32_t numMipmaps, uint32_t flags)
+{
+    GLTextureImpl* impl = new GLTextureImpl;
+    impl->numDimensions    = 3;
+    impl->glInternalFormat = GL_getInternalFormat(format);
+    impl->glType           = GL_getInternalType(format);
+
+    glTextureStorage3DEXT(
+        impl->textureID,
+        GL_TEXTURE_3D,
+        numMipmaps,
+        MapDataFormat[static_cast<size_t>(format)],
+        width,
+        height,
+        depth
+    );
+
+    return Texture3DHandle(impl);
+}
+
+void updateTexture_GL(
+    TextureHandle handle, const void* mem,
+    uint32_t mip,
+    size_t offsetX,  size_t sizeX,
+    size_t offsetY,  size_t sizeY,
+    size_t offsetZ,  size_t sizeZ,
+    size_t rowPitch, size_t depthPitch
+)
+{
+    if (handle != TextureHandle::invalidHandle()) {
+        GLTextureImpl* impl = static_cast<GLTextureImpl*>(handle.value);
+
+        if (impl->numDimensions == 1) {
+            glTextureSubImage1DEXT(
+                impl->textureID,
+                GL_TEXTURE_1D,
+                mip,
+                static_cast<GLint>(offsetX), static_cast<GLsizei>(sizeX),
+                impl->glInternalFormat, impl->glType,
+                mem
+            );
+        } else if (impl->numDimensions == 2) {
+            glTextureSubImage2DEXT(
+                impl->textureID,
+                GL_TEXTURE_2D,
+                mip,
+                static_cast<GLint>(offsetX), static_cast<GLint>(offsetY),
+                static_cast<GLsizei>(sizeX), static_cast<GLsizei>(sizeY),
+                impl->glInternalFormat, impl->glType,
+                mem
+            );
+        } else if (impl->numDimensions == 3) {
+            glTextureSubImage3DEXT(
+                impl->textureID,
+                GL_TEXTURE_3D,
+                mip,
+                static_cast<GLint>(offsetX), static_cast<GLint>(offsetY), static_cast<GLint>(offsetZ),
+                static_cast<GLsizei>(sizeX), static_cast<GLsizei>(sizeY), static_cast<GLsizei>(sizeZ),
+                impl->glInternalFormat, impl->glType,
+                mem
+            );
+        }
+    }
+}
+
+void releaseTexture_GL(TextureHandle handle)
+{
+    if (handle != TextureHandle::invalidHandle()) {
+        GLTextureImpl* impl = static_cast<GLTextureImpl*>(handle.value);
+        delete impl;
+    }
+}
+
+// draw queue stuff is similar for all APIs
+
+DrawQueueHandle createDrawQueue_GL(PipelineStateHandle state)
+{
+    internal::DrawQueue* queue = new internal::DrawQueue(state);
+    return DrawQueueHandle(queue);
+}
+
+void releaseDrawQueue_GL(DrawQueueHandle handle)
+{
+    if (handle != DrawQueueHandle::invalidHandle()) {
+        internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
+        delete queue;
+    }
+}
+
+void setSamplerState_GL(DrawQueueHandle handle, uint32_t idx, SamplerStateHandle sampler)
+{
+    if (handle != DrawQueueHandle::invalidHandle()) {
+        internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
+        queue->setSamplerState(idx, sampler);
+    }
+}
+
+void setPrimitiveTopology_GL(DrawQueueHandle handle, PrimitiveTopology topology)
+{
+    if (handle != DrawQueueHandle::invalidHandle()) {
+        internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
+        queue->setPrimitiveTopology(topology);
+    }
+}
+
+void setVertexBuffer_GL(DrawQueueHandle handle, BufferHandle vb)
+{
+    if (handle != DrawQueueHandle::invalidHandle()) {
+        internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
+        queue->setVertexBuffer(vb);
+    }
+}
+
+void setIndexBuffer_GL(DrawQueueHandle handle, BufferHandle ib)
+{
+    if (handle != DrawQueueHandle::invalidHandle()) {
+        internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
+        queue->setIndexBuffer(ib);
+    }
+}
+
+void setConstantBuffer_GL(DrawQueueHandle handle, uint32_t idx, ConstantBufferHandle buffer)
+{
+    if (handle != DrawQueueHandle::invalidHandle()) {
+        internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
+        queue->setConstantBuffer(idx, buffer);
+    }
+}
+
+void setResource_GL(DrawQueueHandle handle, uint32_t idx, BufferHandle resource)
+{
+    if (handle != DrawQueueHandle::invalidHandle()) {
+        internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
+        queue->setResource(idx, resource);
+    }
+}
+
+void setResource_GL(DrawQueueHandle handle, uint32_t idx, TextureHandle resource)
+{
+    if (handle != DrawQueueHandle::invalidHandle()) {
+        internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
+        queue->setResource(idx, resource);
+    }
+}
+
+void setResourceRW_GL(DrawQueueHandle handle, uint32_t idx, BufferHandle resource)
+{
+    if (handle != DrawQueueHandle::invalidHandle()) {
+        internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
+        queue->setResourceRW(idx, resource);
+    }
+}
+
+void draw_GL(DrawQueueHandle handle, uint32_t count, uint32_t startVertex)
+{
+    if (handle != DrawQueueHandle::invalidHandle()) {
+        internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
+        queue->draw(count, startVertex);
+    }
+}
+
+void drawIndexed_GL(DrawQueueHandle handle, uint32_t count, uint32_t startIndex, uint32_t startVertex)
+{
+    if (handle != DrawQueueHandle::invalidHandle()) {
+        internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
+        queue->drawIndexed(count, startIndex, startVertex);
+    }
+}
+
+void drawInstanced_GL(DrawQueueHandle handle, uint32_t instanceCount, uint32_t count, uint32_t startVertex)
+{
+    if (handle != DrawQueueHandle::invalidHandle()) {
+        internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
+        queue->drawInstanced(instanceCount, count, startVertex);
+    }
+}
+
+void drawIndexedInstanced_GL(DrawQueueHandle handle, uint32_t instanceCount, uint32_t count, uint32_t startIndex, uint32_t startVertex)
+{
+    if (handle != DrawQueueHandle::invalidHandle()) {
+        internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
+        queue->drawIndexedInstanced(instanceCount, count, startIndex, startVertex);
+    }
+}
+
+void submit_GL(DrawQueueHandle handle)
+{
+    if (handle != DrawQueueHandle::invalidHandle()) {
+        internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
+        GL_processDrawQueue(queue);
+        queue->clear();
     }
 }
 

@@ -99,14 +99,17 @@ static DXGI_FORMAT MapDataFormat[DataFormat::Count] = {
     DXGI_FORMAT_R8G8_UNORM,
     DXGI_FORMAT_R16G16_UNORM,
     DXGI_FORMAT_R16G16_FLOAT,
-    DXGI_FORMAT_R32G32_TYPELESS,
+    DXGI_FORMAT_R32G32_SINT,
+    DXGI_FORMAT_R32G32_UINT,
     DXGI_FORMAT_R32G32_FLOAT,
-    DXGI_FORMAT_R32G32B32_TYPELESS,
+    DXGI_FORMAT_R32G32B32_SINT,
+    DXGI_FORMAT_R32G32B32_UINT,
     DXGI_FORMAT_R32G32B32_FLOAT,
     DXGI_FORMAT_R8G8B8A8_UNORM,
     DXGI_FORMAT_R16G16B16A16_UNORM,
     DXGI_FORMAT_R16G16B16A16_FLOAT,
-    DXGI_FORMAT_R32G32B32A32_TYPELESS,
+    DXGI_FORMAT_R32G32B32A32_SINT,
+    DXGI_FORMAT_R32G32B32A32_UINT,
     DXGI_FORMAT_R32G32B32A32_FLOAT,
     DXGI_FORMAT_R11G11B10_FLOAT,
 
@@ -296,7 +299,7 @@ struct RenderTargetImpl final
     }
 };
 
-static UINT dxFormatStride(DataFormat format)
+static inline UINT dxFormatStride(DataFormat format)
 {
     switch (format) {
     case DataFormat::R8:      { return 1;  } break;
@@ -308,14 +311,17 @@ static UINT dxFormatStride(DataFormat format)
     case DataFormat::RG8:     { return 2;  } break;
     case DataFormat::RG16:    { return 4;  } break;
     case DataFormat::RG16F:   { return 4;  } break;
-    case DataFormat::RG32:    { return 8;  } break;
+    case DataFormat::RG32I:   { return 8;  } break;
+    case DataFormat::RG32U:   { return 8;  } break;
     case DataFormat::RG32F:   { return 8;  } break;
-    case DataFormat::RGB32:   { return 12; } break;
+    case DataFormat::RGB32I:  { return 12; } break;
+    case DataFormat::RGB32U:  { return 12; } break;
     case DataFormat::RGB32F:  { return 12; } break;
     case DataFormat::RGBA8:   { return 4;  } break;
     case DataFormat::RGBA16:  { return 8;  } break;
     case DataFormat::RGBA16F: { return 8;  } break;
-    case DataFormat::RGBA32:  { return 16; } break;
+    case DataFormat::RGBA32I: { return 16; } break;
+    case DataFormat::RGBA32U: { return 16; } break;
     case DataFormat::RGBA32F: { return 16; } break;
 
     default: { return 0; } break; // unsupported
@@ -368,7 +374,7 @@ static void dxProcessDrawQueue(internal::DrawQueue* queue)
         DXSharedBuffer* indexBuffer  = static_cast<DXSharedBuffer*>(call.indexBuffer.value);
         UINT            offset       = 0;
 
-        g_pImmediateContext->IASetPrimitiveTopology(MapPrimitiveTopology[static_cast<uint64_t>(call.primitiveTopology)]);
+        g_pImmediateContext->IASetPrimitiveTopology(MapPrimitiveTopology[static_cast<size_t>(call.primitiveTopology)]);
         if (psimpl->vertexFormat != nullptr) {
             ID3D11Buffer* vbuffer = nullptr;
             if (vertexBuffer != nullptr)
@@ -694,10 +700,10 @@ VertexFormatHandle createVertexFormat(
     for (size_t i = 0; i < size; ++i) {
         inputData[i].SemanticName      = elements[i].semanticName;
         inputData[i].SemanticIndex     = elements[i].semanticIndex;
-        inputData[i].Format            = MapDataFormat[static_cast<uint64_t>(elements[i].format)];
+        inputData[i].Format            = MapDataFormat[static_cast<size_t>(elements[i].format)];
         inputData[i].InputSlot         = elements[i].slot;
         inputData[i].AlignedByteOffset = static_cast<UINT>(elements[i].offset);
-        inputData[i].InputSlotClass    = MapVertexElementType[static_cast<uint64_t>(elements[i].type)];
+        inputData[i].InputSlotClass    = MapVertexElementType[static_cast<size_t>(elements[i].type)];
         if (elements[i].type == VertexElementType::PerVertex)
             inputData[i].InstanceDataStepRate = 0;
         else
@@ -737,9 +743,9 @@ PipelineStateHandle createPipelineState(const PipelineStateDescriptor& desc)
     const RasterizerState& rsState = desc.rasterizerState;
 
     D3D11_RASTERIZER_DESC rasterizerDesc;
-    rasterizerDesc.FillMode              = MapFillMode[static_cast<uint64_t>(rsState.fillMode)];
-    rasterizerDesc.CullMode              = MapCullMode[static_cast<uint64_t>(rsState.cullMode)];
-    rasterizerDesc.FrontCounterClockwise = MapCounterDirection[static_cast<uint64_t>(rsState.counterDirection)];
+    rasterizerDesc.FillMode              = MapFillMode[static_cast<size_t>(rsState.fillMode)];
+    rasterizerDesc.CullMode              = MapCullMode[static_cast<size_t>(rsState.cullMode)];
+    rasterizerDesc.FrontCounterClockwise = MapCounterDirection[static_cast<size_t>(rsState.counterDirection)];
     rasterizerDesc.DepthBias             = 0;
     rasterizerDesc.DepthBiasClamp        = 0.0F;
     rasterizerDesc.SlopeScaledDepthBias  = 0.0F;
@@ -763,24 +769,24 @@ PipelineStateHandle createPipelineState(const PipelineStateDescriptor& desc)
     //if (bsState.blendDesc.blendEnabled) {
         blendDesc.RenderTarget[0].BlendEnable           = bsState.blendDesc.blendEnabled;
         blendDesc.RenderTarget[0].RenderTargetWriteMask = static_cast<UINT8>(bsState.renderTargetBlendDesc[0].writeMask);
-        blendDesc.RenderTarget[0].SrcBlend              = MapBlendFactor[static_cast<uint64_t>(bsState.blendDesc.srcBlend)];
-        blendDesc.RenderTarget[0].DestBlend             = MapBlendFactor[static_cast<uint64_t>(bsState.blendDesc.dstBlend)];
-        blendDesc.RenderTarget[0].BlendOp               = MapBlendOp[static_cast<uint64_t>(bsState.blendDesc.blendOp)];
-        blendDesc.RenderTarget[0].SrcBlendAlpha         = MapBlendFactor[static_cast<uint64_t>(bsState.blendDesc.srcBlendAlpha)];
-        blendDesc.RenderTarget[0].DestBlendAlpha        = MapBlendFactor[static_cast<uint64_t>(bsState.blendDesc.dstBlendAlpha)];
-        blendDesc.RenderTarget[0].BlendOpAlpha          = MapBlendOp[static_cast<uint64_t>(bsState.blendDesc.blendOpAlpha)];
+        blendDesc.RenderTarget[0].SrcBlend              = MapBlendFactor[static_cast<size_t>(bsState.blendDesc.srcBlend)];
+        blendDesc.RenderTarget[0].DestBlend             = MapBlendFactor[static_cast<size_t>(bsState.blendDesc.dstBlend)];
+        blendDesc.RenderTarget[0].BlendOp               = MapBlendOp[static_cast<size_t>(bsState.blendDesc.blendOp)];
+        blendDesc.RenderTarget[0].SrcBlendAlpha         = MapBlendFactor[static_cast<size_t>(bsState.blendDesc.srcBlendAlpha)];
+        blendDesc.RenderTarget[0].DestBlendAlpha        = MapBlendFactor[static_cast<size_t>(bsState.blendDesc.dstBlendAlpha)];
+        blendDesc.RenderTarget[0].BlendOpAlpha          = MapBlendOp[static_cast<size_t>(bsState.blendDesc.blendOpAlpha)];
     //}
 
     if (bsState.separateBlendEnabled) {
         for (size_t i = 0; i < 8; ++i) {
             blendDesc.RenderTarget[i].BlendEnable           = bsState.renderTargetBlendDesc[i].blendEnabled;
             blendDesc.RenderTarget[i].RenderTargetWriteMask = static_cast<UINT8>(bsState.renderTargetBlendDesc[i].writeMask);
-            blendDesc.RenderTarget[i].SrcBlend              = MapBlendFactor[static_cast<uint64_t>(bsState.renderTargetBlendDesc[i].srcBlend)];
-            blendDesc.RenderTarget[i].DestBlend             = MapBlendFactor[static_cast<uint64_t>(bsState.renderTargetBlendDesc[i].dstBlend)];
-            blendDesc.RenderTarget[i].BlendOp               = MapBlendOp[static_cast<uint64_t>(bsState.renderTargetBlendDesc[i].blendOp)];
-            blendDesc.RenderTarget[i].SrcBlendAlpha         = MapBlendFactor[static_cast<uint64_t>(bsState.renderTargetBlendDesc[i].srcBlendAlpha)];
-            blendDesc.RenderTarget[i].DestBlendAlpha        = MapBlendFactor[static_cast<uint64_t>(bsState.renderTargetBlendDesc[i].dstBlendAlpha)];
-            blendDesc.RenderTarget[i].BlendOpAlpha          = MapBlendOp[static_cast<uint64_t>(bsState.renderTargetBlendDesc[i].blendOpAlpha)];
+            blendDesc.RenderTarget[i].SrcBlend              = MapBlendFactor[static_cast<size_t>(bsState.renderTargetBlendDesc[i].srcBlend)];
+            blendDesc.RenderTarget[i].DestBlend             = MapBlendFactor[static_cast<size_t>(bsState.renderTargetBlendDesc[i].dstBlend)];
+            blendDesc.RenderTarget[i].BlendOp               = MapBlendOp[static_cast<size_t>(bsState.renderTargetBlendDesc[i].blendOp)];
+            blendDesc.RenderTarget[i].SrcBlendAlpha         = MapBlendFactor[static_cast<size_t>(bsState.renderTargetBlendDesc[i].srcBlendAlpha)];
+            blendDesc.RenderTarget[i].DestBlendAlpha        = MapBlendFactor[static_cast<size_t>(bsState.renderTargetBlendDesc[i].dstBlendAlpha)];
+            blendDesc.RenderTarget[i].BlendOpAlpha          = MapBlendOp[static_cast<size_t>(bsState.renderTargetBlendDesc[i].blendOpAlpha)];
         }
     }
 
@@ -794,19 +800,19 @@ PipelineStateHandle createPipelineState(const PipelineStateDescriptor& desc)
 
     D3D11_DEPTH_STENCIL_DESC depthStencilDesc;
     depthStencilDesc.DepthEnable                  = dsState.depthEnabled;
-    depthStencilDesc.DepthWriteMask               = MapDepthWriteMask[static_cast<uint64_t>(dsState.writeMask)];
-    depthStencilDesc.DepthFunc                    = MapComparisonFunc[static_cast<uint64_t>(dsState.depthFunc)];
+    depthStencilDesc.DepthWriteMask               = MapDepthWriteMask[static_cast<size_t>(dsState.writeMask)];
+    depthStencilDesc.DepthFunc                    = MapComparisonFunc[static_cast<size_t>(dsState.depthFunc)];
     depthStencilDesc.StencilEnable                = dsState.stencilEnabled;
     depthStencilDesc.StencilReadMask              = dsState.stencilReadMask;
     depthStencilDesc.StencilWriteMask             = dsState.stencilWriteMask;
-    depthStencilDesc.FrontFace.StencilFunc        = MapComparisonFunc[static_cast<uint64_t>(dsState.frontFaceStencilDesc.stencilFunc)];
-    depthStencilDesc.FrontFace.StencilFailOp      = MapStencilOp[static_cast<uint64_t>(dsState.frontFaceStencilDesc.failOp)];
-    depthStencilDesc.FrontFace.StencilDepthFailOp = MapStencilOp[static_cast<uint64_t>(dsState.frontFaceStencilDesc.depthFailOp)];
-    depthStencilDesc.FrontFace.StencilPassOp      = MapStencilOp[static_cast<uint64_t>(dsState.frontFaceStencilDesc.passOp)];
-    depthStencilDesc.BackFace.StencilFunc         = MapComparisonFunc[static_cast<uint64_t>(dsState.backFaceStencilDesc.stencilFunc)];
-    depthStencilDesc.BackFace.StencilFailOp       = MapStencilOp[static_cast<uint64_t>(dsState.backFaceStencilDesc.failOp)];
-    depthStencilDesc.BackFace.StencilDepthFailOp  = MapStencilOp[static_cast<uint64_t>(dsState.backFaceStencilDesc.depthFailOp)];
-    depthStencilDesc.BackFace.StencilPassOp       = MapStencilOp[static_cast<uint64_t>(dsState.backFaceStencilDesc.passOp)];
+    depthStencilDesc.FrontFace.StencilFunc        = MapComparisonFunc[static_cast<size_t>(dsState.frontFaceStencilDesc.stencilFunc)];
+    depthStencilDesc.FrontFace.StencilFailOp      = MapStencilOp[static_cast<size_t>(dsState.frontFaceStencilDesc.failOp)];
+    depthStencilDesc.FrontFace.StencilDepthFailOp = MapStencilOp[static_cast<size_t>(dsState.frontFaceStencilDesc.depthFailOp)];
+    depthStencilDesc.FrontFace.StencilPassOp      = MapStencilOp[static_cast<size_t>(dsState.frontFaceStencilDesc.passOp)];
+    depthStencilDesc.BackFace.StencilFunc         = MapComparisonFunc[static_cast<size_t>(dsState.backFaceStencilDesc.stencilFunc)];
+    depthStencilDesc.BackFace.StencilFailOp       = MapStencilOp[static_cast<size_t>(dsState.backFaceStencilDesc.failOp)];
+    depthStencilDesc.BackFace.StencilDepthFailOp  = MapStencilOp[static_cast<size_t>(dsState.backFaceStencilDesc.depthFailOp)];
+    depthStencilDesc.BackFace.StencilPassOp       = MapStencilOp[static_cast<size_t>(dsState.backFaceStencilDesc.passOp)];
 
     ID3D11DepthStencilState* depthStencilState = nullptr;
     if (FAILED(g_pd3dDevice->CreateDepthStencilState(&depthStencilDesc, &depthStencilState))) {
@@ -986,10 +992,10 @@ SamplerStateHandle createSamplerState(const SamplerStateDescriptor& desc)
     D3D11_SAMPLER_DESC samplerDesc;
     std::memset(&samplerDesc, 0, sizeof(samplerDesc));
 
-    samplerDesc.Filter         = MapTextureFilter[static_cast<uint32_t>(desc.filter)];
-    samplerDesc.AddressU       = MapAddressMode[static_cast<uint32_t>(desc.addressU)];
-    samplerDesc.AddressV       = MapAddressMode[static_cast<uint32_t>(desc.addressV)];
-    samplerDesc.AddressW       = MapAddressMode[static_cast<uint32_t>(desc.addressW)];
+    samplerDesc.Filter         = MapTextureFilter[static_cast<size_t>(desc.filter)];
+    samplerDesc.AddressU       = MapAddressMode[static_cast<size_t>(desc.addressU)];
+    samplerDesc.AddressV       = MapAddressMode[static_cast<size_t>(desc.addressV)];
+    samplerDesc.AddressW       = MapAddressMode[static_cast<size_t>(desc.addressW)];
     samplerDesc.MipLODBias     = desc.lodBias;
     samplerDesc.MaxAnisotropy  = desc.maxAnisotropy;
     samplerDesc.ComparisonFunc = MapComparisonFunc[static_cast<uint32_t>(desc.comparisonFunc)];
@@ -1032,7 +1038,7 @@ Texture1DHandle createTexture1D(uint32_t width, DataFormat format, uint32_t numM
     textureDesc.Width          = width;
     textureDesc.MipLevels      = numMipmaps;
     textureDesc.ArraySize      = 1;
-    textureDesc.Format         = MapDataFormat[static_cast<uint32_t>(format)];
+    textureDesc.Format         = MapDataFormat[static_cast<size_t>(format)];
     textureDesc.Usage          = D3D11_USAGE_DEFAULT;
     textureDesc.BindFlags      = bindFlags;
     textureDesc.CPUAccessFlags = 0;
@@ -1047,7 +1053,7 @@ Texture1DHandle createTexture1D(uint32_t width, DataFormat format, uint32_t numM
     D3D11_SHADER_RESOURCE_VIEW_DESC viewDesc;
     std::memset(&viewDesc, 0, sizeof(viewDesc));
 
-    viewDesc.Format                    = MapDataFormat[static_cast<uint32_t>(format)];
+    viewDesc.Format                    = MapDataFormat[static_cast<size_t>(format)];
     viewDesc.ViewDimension             = D3D11_SRV_DIMENSION_TEXTURE1D;
     viewDesc.Texture1D.MipLevels       = numMipmaps;
     //viewDesc.Texture1D.MostDetailedMip = -1;
@@ -1075,7 +1081,7 @@ Texture2DHandle createTexture2D(uint32_t width, uint32_t height, DataFormat form
     if (flags & TextureFlags::DepthStencil)
         bindFlags |= D3D11_BIND_DEPTH_STENCIL;
 
-    DXGI_FORMAT dataFormat = MapDataFormat[static_cast<uint32_t>(format)];
+    DXGI_FORMAT dataFormat = MapDataFormat[static_cast<size_t>(format)];
 
     DXGI_FORMAT textureFormat = dataFormat;
     DXGI_FORMAT viewFormat    = dataFormat;
@@ -1156,7 +1162,7 @@ Texture3DHandle createTexture3D(uint32_t width, uint32_t height, uint32_t depth,
     textureDesc.Height         = height;
     textureDesc.Depth          = depth;
     textureDesc.MipLevels      = numMipmaps;
-    textureDesc.Format         = MapDataFormat[static_cast<uint32_t>(format)];
+    textureDesc.Format         = MapDataFormat[static_cast<size_t>(format)];
     textureDesc.Usage          = D3D11_USAGE_DEFAULT;
     textureDesc.BindFlags      = bindFlags;
     textureDesc.CPUAccessFlags = 0;
@@ -1171,7 +1177,7 @@ Texture3DHandle createTexture3D(uint32_t width, uint32_t height, uint32_t depth,
     D3D11_SHADER_RESOURCE_VIEW_DESC viewDesc;
     std::memset(&viewDesc, 0, sizeof(viewDesc));
 
-    viewDesc.Format                    = MapDataFormat[static_cast<uint32_t>(format)];
+    viewDesc.Format                    = MapDataFormat[static_cast<size_t>(format)];
     viewDesc.ViewDimension             = D3D11_SRV_DIMENSION_TEXTURE3D;
     viewDesc.Texture3D.MipLevels       = numMipmaps;
     //viewDesc.Texture3D.MostDetailedMip = -1;
@@ -1374,6 +1380,8 @@ void present()
 {
     g_pSwapChain->Present(0, 0);
 }
+
+// draw queue stuff is similar for all APIs
 
 DrawQueueHandle createDrawQueue(PipelineStateHandle state)
 {

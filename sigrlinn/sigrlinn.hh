@@ -86,7 +86,7 @@ enum : uint32_t {
 };
 }
 
-enum class MapType : uint32_t
+enum class MapType : size_t
 {
     Read  = 0,
     Write = 1,
@@ -102,7 +102,7 @@ enum : uint32_t {
 }
 
 // formats
-enum class PrimitiveTopology : uint64_t
+enum class PrimitiveTopology : size_t
 {
     TriangleList,
     TriangleStrip,
@@ -110,7 +110,7 @@ enum class PrimitiveTopology : uint64_t
     Count
 };
 
-enum class TextureFilter : uint32_t
+enum class TextureFilter : size_t
 {
     MinMagMip_Point,
     MinMag_Point_Mip_Linear,
@@ -125,7 +125,7 @@ enum class TextureFilter : uint32_t
     Count
 };
 
-enum class AddressMode : uint32_t
+enum class AddressMode : size_t
 {
     Wrap,
     Mirror,
@@ -135,7 +135,7 @@ enum class AddressMode : uint32_t
     Count
 };
 
-enum class DataFormat : uint32_t
+enum class DataFormat : size_t
 {
     BC1,    // DXT1
     BC2,    // DXT3
@@ -167,14 +167,17 @@ enum class DataFormat : uint32_t
     RG8,
     RG16,
     RG16F,
-    RG32,
+    RG32I,
+    RG32U,
     RG32F,
-    RGB32,
+    RGB32I,
+    RGB32U,
     RGB32F,
     RGBA8,
     RGBA16,
     RGBA16F,
-    RGBA32,
+    RGBA32I,
+    RGBA32U,
     RGBA32F,
     R11G11B10F,
 
@@ -191,7 +194,7 @@ inline bool isCompressedFormat(DataFormat format) { return format < DataFormat::
 inline bool isDepthFormat(DataFormat format)      { return format > DataFormat::UnknownDepth;      }
 
 // render state
-enum class FillMode : uint64_t
+enum class FillMode : size_t
 {
     Solid,
     Wireframe,
@@ -199,7 +202,7 @@ enum class FillMode : uint64_t
     Count
 };
 
-enum class CullMode : uint64_t
+enum class CullMode : size_t
 {
     Back,
     Front,
@@ -208,7 +211,7 @@ enum class CullMode : uint64_t
     Count
 };
 
-enum class CounterDirection : uint64_t
+enum class CounterDirection : size_t
 {
     CW,
     CCW,
@@ -216,7 +219,7 @@ enum class CounterDirection : uint64_t
     Count
 };
 
-enum class BlendFactor : uint64_t
+enum class BlendFactor : size_t
 {
     Zero,
     One,
@@ -232,7 +235,7 @@ enum class BlendFactor : uint64_t
     Count
 };
 
-enum class BlendOp : uint64_t
+enum class BlendOp : size_t
 {
     Add,
     Subtract,
@@ -260,7 +263,7 @@ enum class ColorWriteMask : uint8_t
 };
 
 
-enum class DepthWriteMask : uint64_t
+enum class DepthWriteMask : size_t
 {
     Zero,
     All,
@@ -268,7 +271,7 @@ enum class DepthWriteMask : uint64_t
     Count
 };
 
-enum class ComparisonFunc : uint64_t
+enum class ComparisonFunc : size_t
 {
     Always,
     Never,
@@ -285,7 +288,7 @@ typedef ComparisonFunc DepthFunc;
 typedef ComparisonFunc StencilFunc;
 typedef ComparisonFunc SamplerFunc;
 
-enum class StencilOp : uint64_t
+enum class StencilOp : size_t
 {
     Keep,
     Zero,
@@ -357,7 +360,7 @@ struct PipelineStateDescriptor
 };
 
 // vertex stage
-enum class VertexElementType : uint64_t
+enum class VertexElementType : size_t
 {
     PerVertex,
     PerInstance,
@@ -420,13 +423,13 @@ void shutdown();
 uint64_t getGPUCaps();
 
 // shader compiler
-enum class ShaderCompileVersion : uint64_t
+enum class ShaderCompileVersion : size_t
 {
     v4_0,
     v5_0
 };
 
-enum class ShaderCompileTarget : uint64_t
+enum class ShaderCompileTarget : size_t
 {
     VS,
     HS,
