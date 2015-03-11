@@ -275,7 +275,7 @@ void GL_setPipelineState(PipelineStateHandle handle)
         }
 
         if (bs.separateBlendEnabled) {
-            for (size_t i = 0; i < RenderTargetSlot::Count; ++i) {
+            for (uint32_t i = 0; i < RenderTargetSlot::Count; ++i) {
                 uint8_t colorMask = static_cast<uint8_t>(bs.renderTargetBlendDesc[i].writeMask);
                 glColorMaski(
                     i,

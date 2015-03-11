@@ -114,7 +114,7 @@ public:
             data.getIndices().size() * sizeof(MeshData::Index),
             sizeof(MeshData::Index)
         );
-        numIndices = data.getIndices().size();
+        numIndices = static_cast<uint32_t>(data.getIndices().size());
     }
 
     inline sgfx::BufferHandle getVertexBuffer() const { return vertexBuffer; }

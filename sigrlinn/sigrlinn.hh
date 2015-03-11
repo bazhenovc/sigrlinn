@@ -523,9 +523,9 @@ void                  releaseConstantBuffer(ConstantBufferHandle handle);
 SamplerStateHandle createSamplerState(const SamplerStateDescriptor& desc);
 void               releaseSamplerState(SamplerStateHandle handle);
 
-Texture1DHandle createTexture1D(uint32_t width, DataFormat format, size_t numMipmaps, uint32_t flags);
-Texture2DHandle createTexture2D(uint32_t width, uint32_t height, DataFormat format, size_t numMipmaps, uint32_t flags);
-Texture3DHandle createTexture3D(uint32_t width, uint32_t height, uint32_t depth, DataFormat format, size_t numMipmaps, uint32_t flags);
+Texture1DHandle createTexture1D(uint32_t width, DataFormat format, uint32_t numMipmaps, uint32_t flags);
+Texture2DHandle createTexture2D(uint32_t width, uint32_t height, DataFormat format, uint32_t numMipmaps, uint32_t flags);
+Texture3DHandle createTexture3D(uint32_t width, uint32_t height, uint32_t depth, DataFormat format, uint32_t numMipmaps, uint32_t flags);
 
 void            updateTexture(
     TextureHandle handle, const void* mem,

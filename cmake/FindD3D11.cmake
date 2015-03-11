@@ -11,7 +11,7 @@
 set (D3D11_FOUND "NO")
 
 if (WIN32)
-	set (WIN8_SDK_DIR "C:/Program Files (x86)/Windows Kits/8.0")
+	set (WIN8_SDK_DIR "C:/Program Files (x86)/Windows Kits/8.1")
 	set (LEGACY_SDK_DIR "$ENV{DXSDK_DIR}")
 	
 	if (CMAKE_CL_64)
@@ -31,7 +31,8 @@ if (WIN32)
 	if (D3D11_INCLUDE_PATH)
 		find_library (D3D11_LIB 
 			NAMES d3d11
-			PATHS "${WIN8_SDK_DIR}/Lib/win8/um/${ARCH}"
+			#PATHS "${WIN8_SDK_DIR}/Lib/win8/um/${ARCH}"
+			PATHS "${WIN8_SDK_DIR}/Lib/winv6.3/um/${ARCH}"
 			NO_DEFAULT_PATH
 			DOC "Path to the windows 8 d3d11.lib file"
 		)

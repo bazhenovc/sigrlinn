@@ -222,7 +222,7 @@ struct DXSharedBuffer final
         std::memset(&viewDesc, 0, sizeof(viewDesc));
         viewDesc.ViewDimension       = D3D11_SRV_DIMENSION_BUFFER;
         viewDesc.Format              = DXGI_FORMAT_UNKNOWN;
-        viewDesc.Buffer.ElementWidth = numElements;
+        viewDesc.Buffer.ElementWidth = static_cast<UINT>(numElements);
 
         if (FAILED(g_pd3dDevice->CreateShaderResourceView(dataBuffer, &viewDesc, &dataView))) {
             // TODO: error handling
@@ -236,7 +236,7 @@ struct DXSharedBuffer final
         std::memset(&uavDesc, 0, sizeof(uavDesc));
         uavDesc.ViewDimension      = D3D11_UAV_DIMENSION_BUFFER;
         uavDesc.Format             = DXGI_FORMAT_UNKNOWN;
-        uavDesc.Buffer.NumElements = numElements;
+        uavDesc.Buffer.NumElements = static_cast<UINT>(numElements);
 
         if (FAILED(g_pd3dDevice->CreateUnorderedAccessView(dataBuffer, &uavDesc, &dataUAV))) {
             // TODO: error handling
@@ -707,12 +707,12 @@ VertexFormatHandle createVertexFormat(
     }
 
     // validate first
-    if (FAILED(g_pd3dDevice->CreateInputLayout(inputData, size, shaderBytecode, shaderBytecodeSize, nullptr))) {
+    if (FAILED(g_pd3dDevice->CreateInputLayout(inputData, static_cast<UINT>(size), shaderBytecode, shaderBytecodeSize, nullptr))) {
         if (errorReport != nullptr) errorReport("Warning: VertexFormat validation failed!");
     }
 
     ID3D11InputLayout* layout = nullptr;
-    if (FAILED(g_pd3dDevice->CreateInputLayout(inputData, size, shaderBytecode, shaderBytecodeSize, &layout))) {
+    if (FAILED(g_pd3dDevice->CreateInputLayout(inputData, static_cast<UINT>(size), shaderBytecode, shaderBytecodeSize, &layout))) {
         if (errorReport != nullptr) errorReport("Failed to create vertex format!");
         return VertexFormatHandle::invalidHandle();
     }
@@ -879,12 +879,12 @@ BufferHandle createBuffer(uint32_t flags, const void* mem, size_t size, size_t s
     D3D11_BUFFER_DESC bufferDesc;
     std::memset(&bufferDesc, 0, sizeof(bufferDesc));
 
-    bufferDesc.ByteWidth           = size;
+    bufferDesc.ByteWidth           = static_cast<UINT>(size);
     bufferDesc.Usage               = bufferUsage;
     bufferDesc.BindFlags           = bufferBindFlag;
     bufferDesc.CPUAccessFlags      = bufferCPUFlags;
     bufferDesc.MiscFlags           = bufferMiscFlag;
-    bufferDesc.StructureByteStride = stride;
+    bufferDesc.StructureByteStride = static_cast<UINT>(stride);
 
     D3D11_SUBRESOURCE_DATA bufferData;
     std::memset(&bufferData, 0, sizeof(bufferData));
@@ -943,12 +943,12 @@ ConstantBufferHandle createConstantBuffer(const void* mem, size_t size)
 {
     D3D11_BUFFER_DESC bufferDesc;
     std::memset(&bufferDesc, 0, sizeof(bufferDesc));
-    bufferDesc.ByteWidth           = size;
+    bufferDesc.ByteWidth           = static_cast<UINT>(size);
     bufferDesc.Usage               = D3D11_USAGE_DEFAULT;
     bufferDesc.BindFlags           = D3D11_BIND_CONSTANT_BUFFER;
     bufferDesc.CPUAccessFlags      = 0;
     bufferDesc.MiscFlags           = 0;
-    bufferDesc.StructureByteStride = size;
+    bufferDesc.StructureByteStride = static_cast<UINT>(size);
 
     D3D11_SUBRESOURCE_DATA data;
     data.pSysMem          = mem;
@@ -1017,7 +1017,7 @@ void releaseSamplerState(SamplerStateHandle handle)
     }
 }
 
-Texture1DHandle createTexture1D(uint32_t width, DataFormat format, size_t numMipmaps, uint32_t flags)
+Texture1DHandle createTexture1D(uint32_t width, DataFormat format, uint32_t numMipmaps, uint32_t flags)
 {
     UINT bindFlags = D3D11_BIND_SHADER_RESOURCE;
 
@@ -1066,7 +1066,7 @@ Texture1DHandle createTexture1D(uint32_t width, DataFormat format, size_t numMip
     return Texture1DHandle(texture);
 }
 
-Texture2DHandle createTexture2D(uint32_t width, uint32_t height, DataFormat format, size_t numMipmaps, uint32_t flags)
+Texture2DHandle createTexture2D(uint32_t width, uint32_t height, DataFormat format, uint32_t numMipmaps, uint32_t flags)
 {
     UINT bindFlags = D3D11_BIND_SHADER_RESOURCE;
 
@@ -1140,7 +1140,7 @@ Texture2DHandle createTexture2D(uint32_t width, uint32_t height, DataFormat form
     return Texture1DHandle(texture);
 }
 
-Texture3DHandle createTexture3D(uint32_t width, uint32_t height, uint32_t depth, DataFormat format, size_t numMipmaps, uint32_t flags)
+Texture3DHandle createTexture3D(uint32_t width, uint32_t height, uint32_t depth, DataFormat format, uint32_t numMipmaps, uint32_t flags)
 {
     UINT bindFlags = D3D11_BIND_SHADER_RESOURCE;
 
@@ -1203,14 +1203,14 @@ void updateTexture(
         DXSharedBuffer* texture  = static_cast<DXSharedBuffer*>(handle.value);
 
         D3D11_BOX box;
-        box.left   = offsetX;
-        box.right  = offsetX + sizeX;
-        box.top    = offsetY;
-        box.bottom = offsetY + sizeY;
-        box.front  = offsetZ;
-        box.back   = offsetZ + sizeZ;
+        box.left   = static_cast<UINT>(offsetX);
+        box.right  = static_cast<UINT>(offsetX + sizeX);
+        box.top    = static_cast<UINT>(offsetY);
+        box.bottom = static_cast<UINT>(offsetY + sizeY);
+        box.front  = static_cast<UINT>(offsetZ);
+        box.back   = static_cast<UINT>(offsetZ + sizeZ);
 
-        g_pImmediateContext->UpdateSubresource(texture->dataBuffer, mip, &box, mem, rowPitch, depthPitch);
+        g_pImmediateContext->UpdateSubresource(texture->dataBuffer, mip, &box, mem, static_cast<UINT>(rowPitch), static_cast<UINT>(depthPitch));
     }
 }
 

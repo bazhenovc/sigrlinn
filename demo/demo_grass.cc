@@ -78,9 +78,9 @@ bool listFiles(std::string path, std::string mask, std::vector<std::string>& fil
 struct LogicalMeshBuffer final
 {
     uint8_t* data             = nullptr;
-    size_t   dataSize         = 0;
-    size_t   dataFormatStride = 0;
-    size_t   physicalAddress  = 0;
+    uint32_t dataSize         = 0;
+    uint32_t dataFormatStride = 0;
+    uint32_t physicalAddress  = 0;
 };
 
 struct LogicalMesh final
@@ -94,13 +94,13 @@ struct LogicalMesh final
     {
         vertexBuffer.data             = reinterpret_cast<uint8_t*>(data->getVertices().data());
         vertexBuffer.dataFormatStride = sizeof(MeshData::Vertex);
-        vertexBuffer.dataSize         = data->getVertices().size() * sizeof(MeshData::Vertex);
+        vertexBuffer.dataSize         = static_cast<uint32_t>(data->getVertices().size() * sizeof(MeshData::Vertex));
 
         indexBuffer.data              = reinterpret_cast<uint8_t*>(data->getIndices().data());
         indexBuffer.dataFormatStride  = sizeof(MeshData::Index);
-        indexBuffer.dataSize          = data->getIndices().size() * sizeof(MeshData::Index);
+        indexBuffer.dataSize          = static_cast<uint32_t>(data->getIndices().size() * sizeof(MeshData::Index));
 
-        count = data->getIndices().size();
+        count = static_cast<uint32_t>(data->getIndices().size());
     }
 };
 
@@ -146,7 +146,7 @@ struct PhysicalMeshBuffer final
 
         uint8_t* dataPtr = reinterpret_cast<uint8_t*>(sgfx::mapBuffer(physicalBuffer, sgfx::MapType::Write));
         if (dataPtr != nullptr) {
-            size_t pageOffset = 0;
+            uint32_t pageOffset = 0;
             for (size_t i = 0; i < allPages.size(); ++i) {
                 LogicalMeshBuffer* logicalBuffer = allPages[i];
                 // copy logical data to the mapped physical data
@@ -209,7 +209,7 @@ struct DVPGrassManager final
     sgfx::Texture2DHandle    grassTexture;
 
     sgfx::BufferHandle sharedConstantBuffer;
-    size_t             numInstances = 0;
+    uint32_t           numInstances = 0;
 
     enum
     {
@@ -296,7 +296,7 @@ struct DVPGrassManager final
         physicalIndexBuffer.rebuildPages();
 
         if (grassObjects.size() != numInstances) {
-            numInstances = grassObjects.size();
+            numInstances = static_cast<uint32_t>(grassObjects.size());
 
             sgfx::releaseBuffer(sharedConstantBuffer);
             sharedConstantBuffer = sgfx::createBuffer(
@@ -308,7 +308,7 @@ struct DVPGrassManager final
         }
 
         // update constants
-        size_t maxDrawCallCount = 0;
+        uint32_t maxDrawCallCount = 0;
         uint8_t* dataPtr = reinterpret_cast<uint8_t*>(sgfx::mapBuffer(sharedConstantBuffer, sgfx::MapType::Write));
         if (dataPtr != nullptr) {
 
