@@ -190,12 +190,6 @@ static D3D11_STENCIL_OP MapStencilOp[StencilOp::Count] = {
 };
 static_assert((sizeof(MapStencilOp) / sizeof(D3D11_STENCIL_OP)) == static_cast<size_t>(StencilOp::Count), "Mapping is broken!");
 
-static D3D11_INPUT_CLASSIFICATION MapVertexElementType[VertexElementType::Count] = {
-    D3D11_INPUT_PER_VERTEX_DATA,
-    D3D11_INPUT_PER_INSTANCE_DATA
-};
-static_assert((sizeof(MapVertexElementType) / sizeof(D3D11_INPUT_CLASSIFICATION)) == static_cast<size_t>(VertexElementType::Count), "Mapping is broken!");
-
 
 //=============================================================================
 
@@ -698,16 +692,13 @@ VertexFormatHandle createVertexFormat(
     UINT stride = 0;
 
     for (size_t i = 0; i < size; ++i) {
-        inputData[i].SemanticName      = elements[i].semanticName;
-        inputData[i].SemanticIndex     = elements[i].semanticIndex;
-        inputData[i].Format            = MapDataFormat[static_cast<size_t>(elements[i].format)];
-        inputData[i].InputSlot         = elements[i].slot;
-        inputData[i].AlignedByteOffset = static_cast<UINT>(elements[i].offset);
-        inputData[i].InputSlotClass    = MapVertexElementType[static_cast<size_t>(elements[i].type)];
-        if (elements[i].type == VertexElementType::PerVertex)
-            inputData[i].InstanceDataStepRate = 0;
-        else
-            inputData[i].InstanceDataStepRate = 1;
+        inputData[i].SemanticName         = elements[i].semanticName;
+        inputData[i].SemanticIndex        = elements[i].semanticIndex;
+        inputData[i].Format               = MapDataFormat[static_cast<size_t>(elements[i].format)];
+        inputData[i].InputSlot            = elements[i].slot;
+        inputData[i].AlignedByteOffset    = static_cast<UINT>(elements[i].offset);
+        inputData[i].InputSlotClass       = D3D11_INPUT_PER_VERTEX_DATA;
+        inputData[i].InstanceDataStepRate = 0;
 
         stride += dxFormatStride(elements[i].format);
     }

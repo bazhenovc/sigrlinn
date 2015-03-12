@@ -360,22 +360,14 @@ struct PipelineStateDescriptor
 };
 
 // vertex stage
-enum class VertexElementType : size_t
-{
-    PerVertex,
-    PerInstance,
 
-    Count
-};
-
-struct VertexElementDescriptor
+struct VertexElementDescriptor // TODO: rework to make it more compatible with GL and DX
 {
-    const char*       semanticName;
-    uint32_t          semanticIndex;
+    const char*       semanticName;  // not used on GL
+    uint32_t          semanticIndex; // not used on GL
     DataFormat        format;
-    uint32_t          slot;
+    uint32_t          slot;          // not used on GL
     uint64_t          offset;
-    VertexElementType type;
 };
 
 struct SamplerStateDescriptor

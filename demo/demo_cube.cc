@@ -109,13 +109,13 @@ public:
         const size_t stride6 = stride5 + 4 * sizeof(uint8_t); // boneWeights
         const size_t stride7 = stride6 + 4 * sizeof(float);   // color
         sgfx::VertexElementDescriptor vfElements[] = {
-            { "POSITION",    0, sgfx::DataFormat::RGB32F,  0, stride1, sgfx::VertexElementType::PerVertex },
-            { "TEXCOORDA",   0, sgfx::DataFormat::RG32F,   0, stride2, sgfx::VertexElementType::PerVertex },
-            { "TEXCOORDB",   0, sgfx::DataFormat::RG32F,   0, stride3, sgfx::VertexElementType::PerVertex },
-            { "NORMAL",      0, sgfx::DataFormat::RGB32F,  0, stride4, sgfx::VertexElementType::PerVertex },
-            { "BONEIDS",     0, sgfx::DataFormat::R32U,    0, stride5, sgfx::VertexElementType::PerVertex },
-            { "BONEWEIGHTS", 0, sgfx::DataFormat::RGBA32F, 0, stride6, sgfx::VertexElementType::PerVertex },
-            { "VCOLOR",      0, sgfx::DataFormat::R32U,    0, stride7, sgfx::VertexElementType::PerVertex }
+            { "POSITION",    0, sgfx::DataFormat::RGB32F,  0, stride1 },
+            { "TEXCOORDA",   0, sgfx::DataFormat::RG32F,   0, stride2 },
+            { "TEXCOORDB",   0, sgfx::DataFormat::RG32F,   0, stride3 },
+            { "NORMAL",      0, sgfx::DataFormat::RGB32F,  0, stride4 },
+            { "BONEIDS",     0, sgfx::DataFormat::R32U,    0, stride5 },
+            { "BONEWEIGHTS", 0, sgfx::DataFormat::RGBA32F, 0, stride6 },
+            { "VCOLOR",      0, sgfx::DataFormat::R32U,    0, stride7 }
         };
         size_t vfSize = sizeof(vfElements) / sizeof(sgfx::VertexElementDescriptor);
 

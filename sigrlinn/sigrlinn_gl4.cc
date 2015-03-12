@@ -332,6 +332,64 @@ static inline GLenum GL_getInternalType(DataFormat format)
     return 0;
 }
 
+static inline GLint GL_getInternalSize(DataFormat format)
+{
+    switch (format) {
+    case DataFormat::R8:      { return 1; } break;
+    case DataFormat::R16:     { return 1; } break;
+    case DataFormat::R16F:    { return 1; } break;
+    case DataFormat::R32I:    { return 1; } break;
+    case DataFormat::R32U:    { return 1; } break;
+    case DataFormat::R32F:    { return 1; } break;
+    case DataFormat::RG8:     { return 2; } break;
+    case DataFormat::RG16:    { return 2; } break;
+    case DataFormat::RG16F:   { return 2; } break;
+    case DataFormat::RG32I:   { return 2; } break;
+    case DataFormat::RG32U:   { return 2; } break;
+    case DataFormat::RG32F:   { return 2; } break;
+    case DataFormat::RGB32I:  { return 3; } break;
+    case DataFormat::RGB32U:  { return 3; } break;
+    case DataFormat::RGB32F:  { return 3; } break;
+    case DataFormat::RGBA8:   { return 4; } break;
+    case DataFormat::RGBA16:  { return 4; } break;
+    case DataFormat::RGBA16F: { return 4; } break;
+    case DataFormat::RGBA32I: { return 4; } break;
+    case DataFormat::RGBA32U: { return 4; } break;
+    case DataFormat::RGBA32F: { return 4; } break;
+
+    default: { return 0; } break; // unsupported
+    }
+}
+
+static inline GLsizei GL_getInternalStride(DataFormat format)
+{
+    switch (format) {
+    case DataFormat::R8:      { return 1;  } break;
+    case DataFormat::R16:     { return 2;  } break;
+    case DataFormat::R16F:    { return 2;  } break;
+    case DataFormat::R32I:    { return 4;  } break;
+    case DataFormat::R32U:    { return 4;  } break;
+    case DataFormat::R32F:    { return 4;  } break;
+    case DataFormat::RG8:     { return 2;  } break;
+    case DataFormat::RG16:    { return 4;  } break;
+    case DataFormat::RG16F:   { return 4;  } break;
+    case DataFormat::RG32I:   { return 8;  } break;
+    case DataFormat::RG32U:   { return 8;  } break;
+    case DataFormat::RG32F:   { return 8;  } break;
+    case DataFormat::RGB32I:  { return 12; } break;
+    case DataFormat::RGB32U:  { return 12; } break;
+    case DataFormat::RGB32F:  { return 12; } break;
+    case DataFormat::RGBA8:   { return 4;  } break;
+    case DataFormat::RGBA16:  { return 8;  } break;
+    case DataFormat::RGBA16F: { return 8;  } break;
+    case DataFormat::RGBA32I: { return 16; } break;
+    case DataFormat::RGBA32U: { return 16; } break;
+    case DataFormat::RGBA32F: { return 16; } break;
+
+    default: { return 0; } break; // unsupported
+    }
+}
+
 static void GL_setPipelineState(PipelineStateHandle handle)
 {
     if (handle != PipelineStateHandle::invalidHandle()) {
@@ -477,7 +535,21 @@ VertexFormatHandle createVertexFormat_GL(
 )
 {
     GLVertexFormatImpl* impl = new GLVertexFormatImpl;
-    // TODO: implement
+
+    glBindVertexArray(impl->vaoID);
+    for (GLuint i = 0; i < size; ++i) {
+        glVertexAttribPointer(
+            i,
+            GL_getInternalSize(elements[i].format),
+            GL_getInternalType(elements[i].format),
+            false,
+            GL_getInternalStride(elements[i].format),
+            reinterpret_cast<const GLvoid*>(elements[i].offset)
+        );
+        glEnableVertexAttribArray(i);
+    }
+    glBindVertexArray(0);
+
     return VertexFormatHandle(impl);
 }
 
