@@ -66,7 +66,7 @@ typedef Handle<void*, 11> CubemapHandle;
 // render target
 typedef Handle<void*, 12> RenderTargetHandle;
 
-// same tag for buffers is intended
+// different tag for buffers is intended
 typedef Handle<void*, 13> BufferHandle;
 typedef Handle<void*, 14> ConstantBufferHandle;
 
@@ -506,9 +506,10 @@ void                  releasePipelineState(PipelineStateHandle handle);
 
 // buffers
 BufferHandle          createBuffer(uint32_t flags, const void* mem, size_t size, size_t stride);
-void                  releaseBuffer(BufferHandle handle); // use this to release all kinds of buffers
+void                  releaseBuffer(BufferHandle handle);
 void*                 mapBuffer(BufferHandle handle, MapType type);
 void                  unmapBuffer(BufferHandle handle);
+void                  copyBufferData(BufferHandle handle, size_t offset, size_t size, const void* mem);
 
 ConstantBufferHandle  createConstantBuffer(const void* mem, size_t size);
 void                  updateConstantBuffer(ConstantBufferHandle handle, const void* mem);

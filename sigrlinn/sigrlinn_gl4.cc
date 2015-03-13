@@ -664,6 +664,15 @@ void unmapBuffer_GL(BufferHandle handle)
     }
 }
 
+void copyBufferData_GL(BufferHandle handle, size_t offset, size_t size, const void* mem)
+{
+    if (handle != BufferHandle::invalidHandle()) {
+        GLBufferImpl* impl = static_cast<GLBufferImpl*>(handle.value);
+
+        glNamedBufferSubDataEXT(impl->bufferID, offset, size, mem);
+    }
+}
+
 ConstantBufferHandle createConstantBuffer_GL(const void* mem, size_t size)
 {
     GLBufferImpl* impl = new GLBufferImpl;

@@ -426,11 +426,6 @@ static void dxProcessDrawQueue(internal::DrawQueue* queue)
 
 //=============================================================================
 
-static void reportError(const char* msg)
-{
-    OutputDebugString(msg);
-}
-
 bool initD3D11(void* d3dDevice, void* d3dContext, void* d3dSwapChain)
 {
     g_pd3dDevice        = static_cast<ID3D11Device*>(d3dDevice);
@@ -918,7 +913,7 @@ void* mapBuffer(BufferHandle handle, MapType type)
         D3D11_MAPPED_SUBRESOURCE mappedData;
         std::memset(&mappedData, 0, sizeof(mappedData));
 
-        if (FAILED(g_pImmediateContext->Map(buffer->dataBuffer, 0, MapMapType[static_cast<uint32_t>(type)], 0, &mappedData))) {
+        if (FAILED(g_pImmediateContext->Map(buffer->dataBuffer, 0, MapMapType[static_cast<size_t>(type)], 0, &mappedData))) {
             return nullptr;
         }
 
@@ -933,6 +928,29 @@ void unmapBuffer(BufferHandle handle)
         DXSharedBuffer* buffer = static_cast<DXSharedBuffer*>(handle.value);
 
         g_pImmediateContext->Unmap(buffer->dataBuffer, 0);
+    }
+}
+
+void copyBufferData(BufferHandle handle, size_t offset, size_t size, const void* mem)
+{
+    if (handle != BufferHandle::invalidHandle()) {
+        DXSharedBuffer* buffer = static_cast<DXSharedBuffer*>(handle.value);
+
+        D3D11_BOX box;
+        box.left   = static_cast<UINT>(offset);
+        box.right  = static_cast<UINT>(offset + size);
+        box.top    = 0;
+        box.bottom = 1;
+        box.front  = 0;
+        box.back   = 1;
+
+        g_pImmediateContext->UpdateSubresource(
+            buffer->dataBuffer,
+            0,
+            &box, 
+            mem,
+            0, 0
+        );
     }
 }
 
