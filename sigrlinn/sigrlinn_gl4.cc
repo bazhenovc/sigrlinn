@@ -510,7 +510,7 @@ static void GL_processDrawQueue(internal::DrawQueue* queue)
 }
 
 //-------------------------------------------------------------------------------------------------
-bool compileShader_GL(
+bool compileShader(
     const char*          sourceCode,
     size_t               sourceCodeSize,
     ShaderCompileVersion version,
@@ -527,7 +527,7 @@ bool compileShader_GL(
     return false;
 }
 
-VertexFormatHandle createVertexFormat_GL(
+VertexFormatHandle createVertexFormat(
     VertexElementDescriptor* elements,
     size_t                   size,
     void* shaderBytecode, size_t shaderBytecodeSize,
@@ -553,7 +553,7 @@ VertexFormatHandle createVertexFormat_GL(
     return VertexFormatHandle(impl);
 }
 
-void releaseVertexFormat_GL(VertexFormatHandle handle)
+void releaseVertexFormat(VertexFormatHandle handle)
 {
     if (handle != VertexFormatHandle::invalidHandle()) {
         GLVertexFormatImpl* impl = static_cast<GLVertexFormatImpl*>(handle.value);
@@ -561,14 +561,14 @@ void releaseVertexFormat_GL(VertexFormatHandle handle)
     }
 }
 
-PipelineStateHandle createPipelineState_GL(const PipelineStateDescriptor& desc)
+PipelineStateHandle createPipelineState(const PipelineStateDescriptor& desc)
 {
     PipelineStateDescriptor* ret = new PipelineStateDescriptor;
     std::memcpy(ret, &desc, sizeof(PipelineStateDescriptor));
     return PipelineStateHandle(ret);
 }
 
-void releasePipelineState_GL(PipelineStateHandle handle)
+void releasePipelineState(PipelineStateHandle handle)
 {
     if (handle != PipelineStateHandle::invalidHandle()) {
         PipelineStateDescriptor* desc = static_cast<PipelineStateDescriptor*>(handle.value);
@@ -576,7 +576,7 @@ void releasePipelineState_GL(PipelineStateHandle handle)
     }
 }
 
-BufferHandle createBuffer_GL(uint32_t flags, const void* mem, size_t size, size_t stride)
+BufferHandle createBuffer(uint32_t flags, const void* mem, size_t size, size_t stride)
 {
     GLBufferImpl* impl = new GLBufferImpl;
 
@@ -636,7 +636,7 @@ BufferHandle createBuffer_GL(uint32_t flags, const void* mem, size_t size, size_
     return BufferHandle(impl);
 }
 
-void releaseBuffer_GL(BufferHandle handle)
+void releaseBuffer(BufferHandle handle)
 {
     if (handle != BufferHandle::invalidHandle()) {
         GLBufferImpl* impl = static_cast<GLBufferImpl*>(handle.value);
@@ -644,7 +644,7 @@ void releaseBuffer_GL(BufferHandle handle)
     }
 }
 
-void* mapBuffer_GL(BufferHandle handle, MapType type)
+void* mapBuffer(BufferHandle handle, MapType type)
 {
     if (handle != BufferHandle::invalidHandle()) {
         GLBufferImpl* impl = static_cast<GLBufferImpl*>(handle.value);
@@ -655,7 +655,7 @@ void* mapBuffer_GL(BufferHandle handle, MapType type)
     return nullptr;
 }
 
-void unmapBuffer_GL(BufferHandle handle)
+void unmapBuffer(BufferHandle handle)
 {
     if (handle != BufferHandle::invalidHandle()) {
         GLBufferImpl* impl = static_cast<GLBufferImpl*>(handle.value);
@@ -664,7 +664,7 @@ void unmapBuffer_GL(BufferHandle handle)
     }
 }
 
-void copyBufferData_GL(BufferHandle handle, size_t offset, size_t size, const void* mem)
+void copyBufferData(BufferHandle handle, size_t offset, size_t size, const void* mem)
 {
     if (handle != BufferHandle::invalidHandle()) {
         GLBufferImpl* impl = static_cast<GLBufferImpl*>(handle.value);
@@ -673,7 +673,7 @@ void copyBufferData_GL(BufferHandle handle, size_t offset, size_t size, const vo
     }
 }
 
-ConstantBufferHandle createConstantBuffer_GL(const void* mem, size_t size)
+ConstantBufferHandle createConstantBuffer(const void* mem, size_t size)
 {
     GLBufferImpl* impl = new GLBufferImpl;
 
@@ -687,7 +687,7 @@ ConstantBufferHandle createConstantBuffer_GL(const void* mem, size_t size)
     return ConstantBufferHandle(impl);
 }
 
-void updateConstantBuffer_GL(ConstantBufferHandle handle, const void* mem)
+void updateConstantBuffer(ConstantBufferHandle handle, const void* mem)
 {
     if (handle != ConstantBufferHandle::invalidHandle()) {
         GLBufferImpl* impl = static_cast<GLBufferImpl*>(handle.value);
@@ -696,7 +696,7 @@ void updateConstantBuffer_GL(ConstantBufferHandle handle, const void* mem)
     }
 }
 
-void releaseConstantBuffer_GL(ConstantBufferHandle handle)
+void releaseConstantBuffer(ConstantBufferHandle handle)
 {
     if (handle != ConstantBufferHandle::invalidHandle()) {
         GLBufferImpl* impl = static_cast<GLBufferImpl*>(handle.value);
@@ -704,7 +704,7 @@ void releaseConstantBuffer_GL(ConstantBufferHandle handle)
     }
 }
 
-SamplerStateHandle createSamplerState_GL(const SamplerStateDescriptor& desc)
+SamplerStateHandle createSamplerState(const SamplerStateDescriptor& desc)
 {
     GLSamplerStateImpl* impl = new GLSamplerStateImpl;
 
@@ -734,7 +734,7 @@ SamplerStateHandle createSamplerState_GL(const SamplerStateDescriptor& desc)
     return SamplerStateHandle(impl);
 }
 
-void releaseSamplerState_GL(SamplerStateHandle handle)
+void releaseSamplerState(SamplerStateHandle handle)
 {
     if (handle != SamplerStateHandle::invalidHandle()) {
         GLSamplerStateImpl* impl = static_cast<GLSamplerStateImpl*>(handle.value);
@@ -742,7 +742,7 @@ void releaseSamplerState_GL(SamplerStateHandle handle)
     }
 }
 
-Texture1DHandle createTexture1D_GL(uint32_t width, DataFormat format, uint32_t numMipmaps, uint32_t flags)
+Texture1DHandle createTexture1D(uint32_t width, DataFormat format, uint32_t numMipmaps, uint32_t flags)
 {
     GLTextureImpl* impl = new GLTextureImpl;
     impl->numDimensions    = 1;
@@ -760,7 +760,7 @@ Texture1DHandle createTexture1D_GL(uint32_t width, DataFormat format, uint32_t n
     return Texture1DHandle(impl);
 }
 
-Texture2DHandle createTexture2D_GL(uint32_t width, uint32_t height, DataFormat format, uint32_t numMipmaps, uint32_t flags)
+Texture2DHandle createTexture2D(uint32_t width, uint32_t height, DataFormat format, uint32_t numMipmaps, uint32_t flags)
 {
     GLTextureImpl* impl = new GLTextureImpl;
     impl->numDimensions    = 2;
@@ -779,7 +779,7 @@ Texture2DHandle createTexture2D_GL(uint32_t width, uint32_t height, DataFormat f
     return Texture2DHandle(impl);
 }
 
-Texture3DHandle createTexture3D_GL(uint32_t width, uint32_t height, uint32_t depth, DataFormat format, uint32_t numMipmaps, uint32_t flags)
+Texture3DHandle createTexture3D(uint32_t width, uint32_t height, uint32_t depth, DataFormat format, uint32_t numMipmaps, uint32_t flags)
 {
     GLTextureImpl* impl = new GLTextureImpl;
     impl->numDimensions    = 3;
@@ -799,7 +799,7 @@ Texture3DHandle createTexture3D_GL(uint32_t width, uint32_t height, uint32_t dep
     return Texture3DHandle(impl);
 }
 
-void updateTexture_GL(
+void updateTexture(
     TextureHandle handle, const void* mem,
     uint32_t mip,
     size_t offsetX,  size_t sizeX,
@@ -844,7 +844,7 @@ void updateTexture_GL(
     }
 }
 
-void releaseTexture_GL(TextureHandle handle)
+void releaseTexture(TextureHandle handle)
 {
     if (handle != TextureHandle::invalidHandle()) {
         GLTextureImpl* impl = static_cast<GLTextureImpl*>(handle.value);
@@ -854,13 +854,13 @@ void releaseTexture_GL(TextureHandle handle)
 
 // draw queue stuff is similar for all APIs
 
-DrawQueueHandle createDrawQueue_GL(PipelineStateHandle state)
+DrawQueueHandle createDrawQueue(PipelineStateHandle state)
 {
     internal::DrawQueue* queue = new internal::DrawQueue(state);
     return DrawQueueHandle(queue);
 }
 
-void releaseDrawQueue_GL(DrawQueueHandle handle)
+void releaseDrawQueue(DrawQueueHandle handle)
 {
     if (handle != DrawQueueHandle::invalidHandle()) {
         internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
@@ -868,7 +868,7 @@ void releaseDrawQueue_GL(DrawQueueHandle handle)
     }
 }
 
-void setSamplerState_GL(DrawQueueHandle handle, uint32_t idx, SamplerStateHandle sampler)
+void setSamplerState(DrawQueueHandle handle, uint32_t idx, SamplerStateHandle sampler)
 {
     if (handle != DrawQueueHandle::invalidHandle()) {
         internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
@@ -876,7 +876,7 @@ void setSamplerState_GL(DrawQueueHandle handle, uint32_t idx, SamplerStateHandle
     }
 }
 
-void setPrimitiveTopology_GL(DrawQueueHandle handle, PrimitiveTopology topology)
+void setPrimitiveTopology(DrawQueueHandle handle, PrimitiveTopology topology)
 {
     if (handle != DrawQueueHandle::invalidHandle()) {
         internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
@@ -884,7 +884,7 @@ void setPrimitiveTopology_GL(DrawQueueHandle handle, PrimitiveTopology topology)
     }
 }
 
-void setVertexBuffer_GL(DrawQueueHandle handle, BufferHandle vb)
+void setVertexBuffer(DrawQueueHandle handle, BufferHandle vb)
 {
     if (handle != DrawQueueHandle::invalidHandle()) {
         internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
@@ -892,7 +892,7 @@ void setVertexBuffer_GL(DrawQueueHandle handle, BufferHandle vb)
     }
 }
 
-void setIndexBuffer_GL(DrawQueueHandle handle, BufferHandle ib)
+void setIndexBuffer(DrawQueueHandle handle, BufferHandle ib)
 {
     if (handle != DrawQueueHandle::invalidHandle()) {
         internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
@@ -900,7 +900,7 @@ void setIndexBuffer_GL(DrawQueueHandle handle, BufferHandle ib)
     }
 }
 
-void setConstantBuffer_GL(DrawQueueHandle handle, uint32_t idx, ConstantBufferHandle buffer)
+void setConstantBuffer(DrawQueueHandle handle, uint32_t idx, ConstantBufferHandle buffer)
 {
     if (handle != DrawQueueHandle::invalidHandle()) {
         internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
@@ -908,7 +908,7 @@ void setConstantBuffer_GL(DrawQueueHandle handle, uint32_t idx, ConstantBufferHa
     }
 }
 
-void setResource_GL(DrawQueueHandle handle, uint32_t idx, BufferHandle resource)
+void setResource(DrawQueueHandle handle, uint32_t idx, BufferHandle resource)
 {
     if (handle != DrawQueueHandle::invalidHandle()) {
         internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
@@ -916,7 +916,7 @@ void setResource_GL(DrawQueueHandle handle, uint32_t idx, BufferHandle resource)
     }
 }
 
-void setResource_GL(DrawQueueHandle handle, uint32_t idx, TextureHandle resource)
+void setResource(DrawQueueHandle handle, uint32_t idx, TextureHandle resource)
 {
     if (handle != DrawQueueHandle::invalidHandle()) {
         internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
@@ -924,7 +924,7 @@ void setResource_GL(DrawQueueHandle handle, uint32_t idx, TextureHandle resource
     }
 }
 
-void setResourceRW_GL(DrawQueueHandle handle, uint32_t idx, BufferHandle resource)
+void setResourceRW(DrawQueueHandle handle, uint32_t idx, BufferHandle resource)
 {
     if (handle != DrawQueueHandle::invalidHandle()) {
         internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
@@ -932,7 +932,7 @@ void setResourceRW_GL(DrawQueueHandle handle, uint32_t idx, BufferHandle resourc
     }
 }
 
-void draw_GL(DrawQueueHandle handle, uint32_t count, uint32_t startVertex)
+void draw(DrawQueueHandle handle, uint32_t count, uint32_t startVertex)
 {
     if (handle != DrawQueueHandle::invalidHandle()) {
         internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
@@ -940,7 +940,7 @@ void draw_GL(DrawQueueHandle handle, uint32_t count, uint32_t startVertex)
     }
 }
 
-void drawIndexed_GL(DrawQueueHandle handle, uint32_t count, uint32_t startIndex, uint32_t startVertex)
+void drawIndexed(DrawQueueHandle handle, uint32_t count, uint32_t startIndex, uint32_t startVertex)
 {
     if (handle != DrawQueueHandle::invalidHandle()) {
         internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
@@ -948,7 +948,7 @@ void drawIndexed_GL(DrawQueueHandle handle, uint32_t count, uint32_t startIndex,
     }
 }
 
-void drawInstanced_GL(DrawQueueHandle handle, uint32_t instanceCount, uint32_t count, uint32_t startVertex)
+void drawInstanced(DrawQueueHandle handle, uint32_t instanceCount, uint32_t count, uint32_t startVertex)
 {
     if (handle != DrawQueueHandle::invalidHandle()) {
         internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
@@ -956,7 +956,7 @@ void drawInstanced_GL(DrawQueueHandle handle, uint32_t instanceCount, uint32_t c
     }
 }
 
-void drawIndexedInstanced_GL(DrawQueueHandle handle, uint32_t instanceCount, uint32_t count, uint32_t startIndex, uint32_t startVertex)
+void drawIndexedInstanced(DrawQueueHandle handle, uint32_t instanceCount, uint32_t count, uint32_t startIndex, uint32_t startVertex)
 {
     if (handle != DrawQueueHandle::invalidHandle()) {
         internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
@@ -964,7 +964,7 @@ void drawIndexedInstanced_GL(DrawQueueHandle handle, uint32_t instanceCount, uin
     }
 }
 
-void submit_GL(DrawQueueHandle handle)
+void submit(DrawQueueHandle handle)
 {
     if (handle != DrawQueueHandle::invalidHandle()) {
         internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
