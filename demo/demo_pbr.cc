@@ -25,63 +25,8 @@
 
 #include <memory>
 
-#define GLM_FORCE_PURE
 #include <glm/glm.hpp>
 #include <glm/ext.hpp>
-
-namespace GfxUtils
-{
-    inline void Release(sgfx::VertexShaderHandle obj)   { sgfx::releaseVertexShader(obj); }
-    inline void Release(sgfx::HullShaderHandle obj)     { sgfx::releaseHullShader(obj); }
-    inline void Release(sgfx::DomainShaderHandle obj)   { sgfx::releaseDomainShader(obj); }
-    inline void Release(sgfx::GeometryShaderHandle obj) { sgfx::releaseGeometryShader(obj); }
-    inline void Release(sgfx::PixelShaderHandle obj)    { sgfx::releasePixelShader(obj); }
-    inline void Release(sgfx::SurfaceShaderHandle obj)  { sgfx::releaseSurfaceShader(obj); }
-    inline void Release(sgfx::PipelineStateHandle obj)  { sgfx::releasePipelineState(obj); }
-    inline void Release(sgfx::BufferHandle obj)         { sgfx::releaseBuffer(obj); }
-    inline void Release(sgfx::ConstantBufferHandle obj) { sgfx::releaseConstantBuffer(obj); }
-    inline void Release(sgfx::SamplerStateHandle obj)   { sgfx::releaseSamplerState(obj); }
-    inline void Release(sgfx::TextureHandle obj)        { sgfx::releaseTexture(obj); }
-    inline void Release(sgfx::RenderTargetHandle obj)   { sgfx::releaseRenderTarget(obj); }
-    inline void Release(sgfx::DrawQueueHandle obj)      { sgfx::releaseDrawQueue(obj); }
-    inline void Release(sgfx::VertexFormatHandle obj)   { sgfx::releaseVertexFormat(obj); }
-}
-
-template <typename T>
-struct iGfxObject final
-{
-private:
-    T gfxObject;
-
-public:
-    inline          iGfxObject()                        {}
-    inline explicit iGfxObject(T newObject) : gfxObject(newObject) {}
-    inline          iGfxObject(const iGfxObject& other) = delete;
-    inline          ~iGfxObject()                       { GfxUtils::Release(gfxObject); }
-
-    inline iGfxObject& operator=(T newObject)             { GfxUtils::Release(gfxObject); gfxObject = newObject; return *this; }
-    inline iGfxObject& operator=(const iGfxObject& other) = delete;
-
-    inline operator T()             { return gfxObject; }
-    inline operator const T() const { return gfxObject; }
-
-    inline bool valid() const { return gfxObject.value != 0; }
-};
-
-typedef iGfxObject<sgfx::VertexShaderHandle>   iGfxVertexShader;
-typedef iGfxObject<sgfx::HullShaderHandle>     iGfxHullShader;
-typedef iGfxObject<sgfx::DomainShaderHandle>   iGfxDomainShader;
-typedef iGfxObject<sgfx::GeometryShaderHandle> iGfxGeometryShader;
-typedef iGfxObject<sgfx::PixelShaderHandle>    iGfxPixelShader;
-typedef iGfxObject<sgfx::SurfaceShaderHandle>  iGfxSurfaceShader;
-typedef iGfxObject<sgfx::PipelineStateHandle>  iGfxPipelineState;
-typedef iGfxObject<sgfx::BufferHandle>         iGfxBuffer;
-typedef iGfxObject<sgfx::ConstantBufferHandle> iGfxConstantBuffer;
-typedef iGfxObject<sgfx::SamplerStateHandle>   iGfxSamplerState;
-typedef iGfxObject<sgfx::TextureHandle>        iGfxTexture;
-typedef iGfxObject<sgfx::RenderTargetHandle>   iGfxRenderTarget;
-typedef iGfxObject<sgfx::DrawQueueHandle>      iGfxDrawQueue;
-typedef iGfxObject<sgfx::VertexFormatHandle>   iGfxVertexFormat;
 
 class Mesh
 {

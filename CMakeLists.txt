@@ -54,6 +54,4 @@ endfunction()
 AddDemo(GrassDemo demo/demo_grass.cc)
 AddDemo(CubeDemo demo/demo_cube.cc)
 AddDemo(PBR demo/demo_pbr.cc)
-
-#add_executable(NBody WIN32 demo/demo_nbody.cc demo/win32_app.cc)
-#target_link_libraries(NBody Sigrlinn)
+AddDemo(Terrain demo/demo_terrain.cc)
