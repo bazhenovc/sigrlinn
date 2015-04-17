@@ -395,6 +395,13 @@ static void GL_setPipelineState(PipelineStateHandle handle)
     if (handle != PipelineStateHandle::invalidHandle()) {
         PipelineStateDescriptor* state = static_cast<PipelineStateDescriptor*>(handle.value);
 
+        // vao
+        GLVertexFormatImpl* vertexFormat = static_cast<GLVertexFormatImpl*>(state->vertexFormat.value);
+        if (vertexFormat != nullptr)
+            glBindVertexArray(vertexFormat->vaoID);
+        else
+            glBindVertexArray(0);
+
         // rasterizer state
         const RasterizerState& rs = state->rasterizerState;
         glPolygonMode(GL_FRONT_AND_BACK, MapFillMode[static_cast<uint32_t>(rs.fillMode)]);
@@ -506,7 +513,129 @@ static void GL_setPipelineState(PipelineStateHandle handle)
 
 static void GL_processDrawQueue(internal::DrawQueue* queue)
 {
-    // TODO: implement me!
+    GL_setPipelineState(queue->getState());
+
+    // set sampler states
+    GLuint samplers[internal::DrawQueue::kMaxSamplerStates] = { 0 };
+    for (size_t i = 0; i < internal::DrawQueue::kMaxSamplerStates; ++i) {
+        GLSamplerStateImpl* samplerState = static_cast<GLSamplerStateImpl*>(queue->samplerStates[i].value);
+
+        if (samplerState != nullptr)
+            samplers[i] = samplerState->samplerID;
+    }
+    glBindSamplers(0, internal::DrawQueue::kMaxSamplerStates, samplers);
+
+    // process draw calls
+    for (const internal::DrawCall& call: queue->getDrawCalls()) {
+
+        // vertex and index buffers
+        GLBufferImpl* vertexBuffer = static_cast<GLBufferImpl*>(call.vertexBuffer.value);
+        GLBufferImpl* indexBuffer  = static_cast<GLBufferImpl*>(call.indexBuffer.value);
+
+        GLuint vbuffer = 0;
+        if (vertexBuffer != nullptr)
+            vbuffer = vertexBuffer->bufferID;
+
+        GLuint ibuffer = 0;
+        if (indexBuffer != nullptr)
+            ibuffer = indexBuffer->bufferID;
+
+        glBindBuffer(GL_ARRAY_BUFFER, vbuffer);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibuffer);
+
+        // constant buffers
+        GLuint constantBuffers[internal::DrawCall::kMaxConstantBuffers] = { 0 };
+        for (size_t i = 0; i < internal::DrawCall::kMaxConstantBuffers; ++i) {
+            GLBufferImpl* buffer = static_cast<GLBufferImpl*>(call.constantBuffers[i].value);
+
+            if (buffer != nullptr)
+                constantBuffers[i] = buffer->bufferID;
+        }
+        glBindBuffersBase(GL_UNIFORM_BUFFER, 0, internal::DrawCall::kMaxConstantBuffers, constantBuffers);
+
+        // shader resources
+        // this is a tricky part, because it can be either a buffer or a texture
+        // this code attempts to bind as much stuff as possible with a single call
+        enum SRVType {
+            SRV_None,
+            SRV_Texture,
+            SRV_Buffer
+        };
+
+        size_t count = 0;
+        GLuint shaderResources[internal::DrawCall::kMaxShaderResources] = { 0 };
+        
+        SRVType prevType    = call.shaderResources[0].isTexture ? SRV_Texture : SRV_Buffer;
+        SRVType currentType = SRV_None;
+        size_t  lastIndex   = 0;
+
+        for (size_t i = 0; i < internal::DrawCall::kMaxShaderResources; ++i) {
+            const internal::ShaderResource& resource = call.shaderResources[i];
+
+            if (resource.isTexture)
+                currentType = SRV_Texture;
+            else
+                currentType = SRV_Buffer;
+
+            if (resource.isTexture) {
+                if (prevType != currentType) { // flush buffers
+                    glBindBuffersBase(GL_SHADER_STORAGE_BUFFER, i, count, shaderResources);
+                    lastIndex = i;
+                    count     = 0;
+                    prevType  = currentType;
+                }
+
+                GLTextureImpl* texture = static_cast<GLTextureImpl*>(resource.value);
+                shaderResources[count] = texture->textureID;
+                count++;
+            } else {
+                if (prevType != currentType) { // flush textures
+                    glBindTextures(i, count, shaderResources);
+                    lastIndex = i;
+                    count     = 0;
+                    prevType  = currentType;
+                }
+
+                GLBufferImpl* buffer   = static_cast<GLBufferImpl*>(resource.value);
+                shaderResources[count] = buffer->bufferID;
+                count++;
+            }
+        }
+
+        // bind remaining resources
+        if (count != 0) {
+            switch (currentType) {
+            case SRV_None:    {} break;
+            case SRV_Texture: { glBindTextures(lastIndex, count, shaderResources); } break;
+            case SRV_Buffer:  { glBindBuffersBase(GL_SHADER_STORAGE_BUFFER, lastIndex, count, shaderResources); } break;
+            }
+        }
+
+        // draw
+        GLenum topology = MapPrimitiveTopology[static_cast<size_t>(call.primitiveTopology)];
+
+        switch (call.type) {
+        case internal::DrawCall::Draw:                 { glDrawArrays(topology, call.count, call.startVertex); } break;
+        case internal::DrawCall::DrawIndexed:          { glDrawElements(topology, call.count, GL_UNSIGNED_INT, reinterpret_cast<const GLvoid*>(call.startIndex)); } break;
+        case internal::DrawCall::DrawInstanced:        { glDrawArraysInstanced(topology, 0, call.instanceCount, call.count); } break;
+        case internal::DrawCall::DrawIndexedInstanced: { glDrawElementsInstanced(topology, call.instanceCount, GL_UNSIGNED_INT, reinterpret_cast<const GLvoid*>(call.startIndex), call.count); } break;
+        }
+    }
+}
+
+//=============================================================================
+bool initOpenGL()
+{
+    glewInit();
+    return true;
+}
+
+void shutdown()
+{}
+
+uint64_t getGPUCaps()
+{
+    return 0; // not implemented yet
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -921,14 +1050,6 @@ void setResource(DrawQueueHandle handle, uint32_t idx, TextureHandle resource)
     if (handle != DrawQueueHandle::invalidHandle()) {
         internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
         queue->setResource(idx, resource);
-    }
-}
-
-void setResourceRW(DrawQueueHandle handle, uint32_t idx, BufferHandle resource)
-{
-    if (handle != DrawQueueHandle::invalidHandle()) {
-        internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
-        queue->setResourceRW(idx, resource);
     }
 }
 

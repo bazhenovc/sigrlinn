@@ -393,7 +393,7 @@ static void dxProcessDrawQueue(internal::DrawQueue* queue)
         g_pImmediateContext->GSSetConstantBuffers(0, internal::DrawCall::kMaxConstantBuffers, constantBuffers);
         g_pImmediateContext->PSSetConstantBuffers(0, internal::DrawCall::kMaxConstantBuffers, constantBuffers);
 
-        // shader resources
+        // shader resources and textures
         ID3D11ShaderResourceView* shaderResources[internal::DrawCall::kMaxShaderResources] = { nullptr };
         for (size_t i = 0; i < internal::DrawCall::kMaxShaderResources; ++i) {
             DXSharedBuffer* buffer = static_cast<DXSharedBuffer*>(call.shaderResources[i].value);
@@ -414,18 +414,9 @@ static void dxProcessDrawQueue(internal::DrawQueue* queue)
         case internal::DrawCall::DrawIndexedInstanced: { g_pImmediateContext->DrawIndexedInstanced(call.count, call.instanceCount, call.startIndex, call.startVertex, 0); } break;
         }
     }
-
-    // reset shader resources
-    ID3D11ShaderResourceView* shaderResources[internal::DrawCall::kMaxShaderResources] = { nullptr };
-    g_pImmediateContext->VSSetShaderResources(0, internal::DrawCall::kMaxShaderResources, shaderResources);
-    g_pImmediateContext->HSSetShaderResources(0, internal::DrawCall::kMaxShaderResources, shaderResources);
-    g_pImmediateContext->DSSetShaderResources(0, internal::DrawCall::kMaxShaderResources, shaderResources);
-    g_pImmediateContext->GSSetShaderResources(0, internal::DrawCall::kMaxShaderResources, shaderResources);
-    g_pImmediateContext->PSSetShaderResources(0, internal::DrawCall::kMaxShaderResources, shaderResources);
 }
 
 //=============================================================================
-
 bool initD3D11(void* d3dDevice, void* d3dContext, void* d3dSwapChain)
 {
     g_pd3dDevice        = static_cast<ID3D11Device*>(d3dDevice);
@@ -438,8 +429,42 @@ bool initD3D11(void* d3dDevice, void* d3dContext, void* d3dSwapChain)
 void shutdown()
 {}
 
-// shader compiling
+uint64_t getGPUCaps()
+{
+    uint64_t caps = 0;
 
+    D3D_FEATURE_LEVEL featureLevel = g_pd3dDevice->GetFeatureLevel();
+
+    // default features
+    caps |= GPUCaps::MultipleRenderTargets;
+    caps |= GPUCaps::StreamOutput;
+    caps |= GPUCaps::AlphaToCoverage;
+    caps |= GPUCaps::SeparateBlend;
+    caps |= GPUCaps::StructuredBuffer;
+    caps |= GPUCaps::RWStructuredBuffer;
+
+    caps |= GPUCaps::TextureCompressionDXT;
+    caps |= GPUCaps::TextureFormatInteger;
+    caps |= GPUCaps::TextureFormatFloat;
+
+    if (featureLevel >= D3D_FEATURE_LEVEL_10_0) {
+        caps |= GPUCaps::GeometryShader;
+        caps |= GPUCaps::ComputeShader;
+        caps |= GPUCaps::TextureArray;
+    }
+
+    if (featureLevel >= D3D_FEATURE_LEVEL_10_1) {
+        caps |= GPUCaps::CubemapArray;
+    }
+
+    if (featureLevel >= D3D_FEATURE_LEVEL_11_0) {
+        caps |= GPUCaps::TessellationShader;
+    }
+
+    return caps;
+}
+
+//-------------------------------------------------------------------------------------------------
 bool compileShader(
     const char*          sourceCode,
     size_t               sourceCodeSize,
@@ -1459,14 +1484,6 @@ void setResource(DrawQueueHandle handle, uint32_t idx, TextureHandle resource)
     if (handle != DrawQueueHandle::invalidHandle()) {
         internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
         queue->setResource(idx, resource);
-    }
-}
-
-void setResourceRW(DrawQueueHandle handle, uint32_t idx, BufferHandle resource)
-{
-    if (handle != DrawQueueHandle::invalidHandle()) {
-        internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
-        queue->setResourceRW(idx, resource);
     }
 }
 

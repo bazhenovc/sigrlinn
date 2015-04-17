@@ -33,6 +33,17 @@ namespace internal
 {
 
 // emulated draw queues for pre-DX12 APIs (DX11 and GL4)
+struct ShaderResource final
+{
+    bool  isTexture = false;
+    void* value     = nullptr;
+
+    inline ShaderResource() {}
+    inline ShaderResource(bool texture, void* newHandle)
+        : isTexture(texture), value(newHandle)
+    {}
+};
+
 struct DrawCall final
 {
     enum Type : uint32_t
@@ -50,8 +61,7 @@ struct DrawCall final
     };
 
     ConstantBufferHandle constantBuffers[kMaxConstantBuffers];
-    BufferHandle         shaderResources[kMaxShaderResources];
-    BufferHandle         rwShaderResources[kMaxShaderResources];
+    ShaderResource       shaderResources[kMaxShaderResources];
 
     BufferHandle      vertexBuffer;
     BufferHandle      indexBuffer;
@@ -109,17 +119,12 @@ public:
 
     inline void setResource(uint32_t idx, BufferHandle resource)
     {
-        currentDrawCall.shaderResources[idx] = resource;
+        currentDrawCall.shaderResources[idx] = ShaderResource(false, resource.value);
     }
 
-    inline void setResource(uint32_t idx, TextureHandle handle)
+    inline void setResource(uint32_t idx, TextureHandle resource)
     {
-        currentDrawCall.shaderResources[idx] = BufferHandle(handle.value);
-    }
-
-    inline void setResourceRW(uint32_t idx, BufferHandle resource)
-    {
-        currentDrawCall.rwShaderResources[idx] = resource;
+        currentDrawCall.shaderResources[idx] = ShaderResource(true, resource.value);
     }
 
     inline void draw(uint32_t count, uint32_t startVertex)

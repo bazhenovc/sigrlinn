@@ -392,13 +392,31 @@ struct RenderTargetDescriptor
 };
 
 // caps
-enum class GPUCaps : uint64_t
-{
+namespace GPUCaps {
+enum : uint64_t {
+    // general GPU features
     GeometryShader        = (1UL << 0),
     TessellationShader    = (1UL << 1),
     ComputeShader         = (1UL << 2),
-    MultipleRenderTargets = (1UL << 3)
+    MultipleRenderTargets = (1UL << 3),
+    TextureArray          = (1UL << 4),
+    CubemapArray          = (1UL << 5),
+    StreamOutput          = (1UL << 6),
+    AlphaToCoverage       = (1UL << 7),
+    SeparateBlend         = (1UL << 8),
+    StructuredBuffer      = (1UL << 9),
+    RWStructuredBuffer    = (1UL << 10),
+
+    // texture compression support
+    TextureCompressionDXT = (1UL << 11),
+    TextureCompressionPVR = (1UL << 12),
+    TextureCompressionETC = (1UL << 13),
+
+    // texture format support
+    TextureFormatInteger  = (1UL << 14),
+    TextureFormatFloat    = (1UL << 15)
 };
+}
 
 // misc
 typedef void(*ErrorReportFunc)(const char*);
