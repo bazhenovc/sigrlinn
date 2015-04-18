@@ -60,7 +60,7 @@ OpenGL ES 3.0        | Possible, but not planned for the nearest future
 ### Similar projects
 
 * [BGFX](https://github.com/bkaradzic/bgfx) - A similar library that does the same things differently.
-  - It supports DX9 and above, while SGFX aims at DX10 and above. Supporting higher feature level simplifies library design and removes a lot of legacy. *Use BGFX if you need to support DX9 or WindowsXP!* SGFX will likely never support those.
+  - It supports DX9 and above, while SGFX aims at DX10 and above. Supporting higher feature level simplifies library design and removes a lot of legacy. **Use BGFX if you need to support DX9 or WindowsXP!** SGFX will likely never support those.
   - It strictly supports mobile platforms, while SGFX has no plans for it. This may change in the future, however.
   - It adresses cross-platform shaders issue, however this is somewhat limiting. SGFX intentionally does not address this.
   - It does *a lot* of additional work under the hood (e.g. draw call sorting). SGFX has a different puprose and different target audience, therefore it avoids doing extra work unless this is vital. SGFX assumes that users graphics engine already has draw call sorting and other important things as well.
