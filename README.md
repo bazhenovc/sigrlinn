@@ -1,8 +1,7 @@
-# Sigrlinn
-## Graphics API library
+# Sigrlinn - An abstract graphics API library
 
 ### Intro
-Sigrlinn is an abstract cross platform graphical API, that tries to make you forget about different GPU API and their evolution in time.
+Sigrlinn is an abstract cross platform graphical API, that tries to make you forget about different GPU APIs and their evolution in time.
 
 ### What does the name mean?
 Sigrlinn is the name of a pretty Scandinavian princess, daugther of the king Sváfnir of Sváfaland, from the [Helgakviða Hjörvarðssonar](http://en.wikipedia.org/wiki/Helgakvi%C3%B0a_Hj%C3%B6rvar%C3%B0ssonar) poem.
@@ -63,7 +62,7 @@ OpenGL ES 3.0        | Possible, but not planned for the nearest future
 * [BGFX](https://github.com/bkaradzic/bgfx) - A similar library that does the same things differently.
   - It supports DX9 and above, while SGFX aims at DX10 and above. Supporting higher feature level simplifies library design and removes a lot of legacy. *Use BGFX if you need to support DX9 or WindowsXP!* SGFX will likely never support those.
   - It strictly supports mobile platforms, while SGFX has no plans for it. This may change in the future, however.
-  - It adresses cross-platform shaders issue, however this is somewhat limiting. SGFX intentioally does not address this.
+  - It adresses cross-platform shaders issue, however this is somewhat limiting. SGFX intentionally does not address this.
   - It does *a lot* of additional work under the hood (e.g. draw call sorting). SGFX has a different puprose and different target audience, therefore it avoids doing extra work unless this is vital. SGFX assumes that users graphics engine already has draw call sorting and other important things as well.
   - It ships with its own tools for shader compiling, texture compressing, etc. which are meant to be used with the library. SGFX assumes that users graphics engine already has this.
 
