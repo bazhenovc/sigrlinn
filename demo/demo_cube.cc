@@ -390,7 +390,7 @@ public:
 
             sgfx::submit(drawQueue);
         }
-        sgfx::present();
+        sgfx::present(1);
     }
 };
 

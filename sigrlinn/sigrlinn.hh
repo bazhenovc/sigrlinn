@@ -563,7 +563,7 @@ void               setRenderTarget(RenderTargetHandle handle);
 void               clearRenderTarget(RenderTargetHandle handle, uint32_t color);
 void               clearRenderTarget(RenderTargetHandle handle, uint32_t slot, uint32_t color);
 void               clearDepthStencil(RenderTargetHandle handle, float depth, uint8_t stencil);
-void               present();
+void               present(uint32_t swapInterval);
 
 // drawing
 DrawQueueHandle createDrawQueue(PipelineStateHandle state);

@@ -378,7 +378,7 @@ public:
         }
 
         // present frame
-        sgfx::present();
+        sgfx::present(1);
     }
 };
 

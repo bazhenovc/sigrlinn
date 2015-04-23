@@ -1410,9 +1410,9 @@ void clearDepthStencil(RenderTargetHandle handle, float depth, uint8_t stencil)
     }
 }
 
-void present()
+void present(uint32_t swapInterval)
 {
-    g_pSwapChain->Present(0, 0);
+    g_pSwapChain->Present(swapInterval, 0);
 }
 
 // draw queue stuff is similar for all APIs
