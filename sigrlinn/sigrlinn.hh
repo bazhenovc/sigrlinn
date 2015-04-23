@@ -430,6 +430,14 @@ bool initOpenGL();
 
 void shutdown();
 
+typedef void* (*AllocFunc)(size_t size);
+typedef void  (*FreeFunc)(void* ptr);
+
+// memory
+void  setAllocator(AllocFunc nalloc, FreeFunc nfree);
+void* allocate(size_t size);
+void  deallocate(void* ptr);
+
 uint64_t getGPUCaps();
 
 // shader compiler
@@ -477,7 +485,7 @@ bool compileShader(
     uint64_t             flags,
     ErrorReportFunc      errorFunc,
 
-    void*&  outData, // delete []
+    void*&  outData, // use deallocate() to dispose this
     size_t& outDataSize
 );
 

@@ -28,6 +28,18 @@
 
 namespace sgfx
 {
+
+// declared in sigrlinn.hh
+void* allocate(size_t size);
+void  deallocate(void* ptr);
+
+// default array allocator
+struct DefaultAllocator
+{
+    static inline uint8_t* Allocate(size_t size) { return reinterpret_cast<uint8_t*>(allocate(size)); }
+    static inline void     Free(uint8_t* ptr)    { deallocate(ptr); }
+};
+
 namespace internal
 {
 ///
@@ -97,8 +109,8 @@ public:
 /// DynamicArray is very efficient with random access pattern, while adding and removing elements
 /// is less effective compared to List.
 ///
-template <typename T, size_t I = 32, size_t G = 64>
-class DynamicArray final : public ImmutableArray<T>
+template <typename T, size_t I = 32, size_t G = 64, typename A = DefaultAllocator>
+class DynamicArray final : public ImmutableArray < T >
 {
 protected:
 
@@ -111,7 +123,7 @@ private:
     enum
     {
         kInplaceStorageSize = I,
-        kGrowAmount         = G
+        kGrowAmount = G
     };
 
     uint8_t _inplaceStorage[kInplaceStorageSize * sizeof(T)];
@@ -120,7 +132,7 @@ private:
     {
         uint8_t* ptr = reinterpret_cast<uint8_t*>(pointer);
         if (ptr != _inplaceStorage) {
-            delete [] ptr;
+            A::Free(ptr);
             pointer = reinterpret_cast<T*>(_inplaceStorage);
         }
     }
@@ -139,6 +151,9 @@ public:
 
     inline DynamicArray(const DynamicArray& other)
     {
+        capacity = kInplaceStorageSize;
+        pointer = reinterpret_cast<T*>(_inplaceStorage);
+
         Resize(other.GetSize());
         for (size_t i = 0; i < size; ++i)
             ::new (&pointer[i]) T(other[i]);
@@ -211,8 +226,7 @@ public:
         capacity = newCapacity;
 
         if (newCapacity > kInplaceStorageSize) {
-            uint8_t* newPointer = new uint8_t[newCapacity * sizeof(T)];
-            T* ptr = reinterpret_cast<T*>(newPointer);
+            T* ptr = reinterpret_cast<T*>(A::Allocate(newCapacity * sizeof(T)));
 
             for (size_t i = 0; i < size; ++i)
                 ::new (&ptr[i]) T(static_cast<T&&>(pointer[i]));
@@ -230,7 +244,7 @@ public:
 
         T* ptr = pointer + size;
         ::new (ptr) T(element);
-        size ++;
+        size++;
     }
 
     template <typename ...Args>
@@ -241,7 +255,7 @@ public:
 
         T* ptr = pointer + size;
         ::new (ptr) T(static_cast<Args&&>(args)...);
-        size ++;
+        size++;
     }
 
     inline void Remove(size_t index)
@@ -267,4 +281,5 @@ public:
 };
 
 }
+
 }

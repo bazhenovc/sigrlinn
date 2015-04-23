@@ -190,12 +190,25 @@ static D3D11_STENCIL_OP MapStencilOp[StencilOp::Count] = {
 };
 static_assert((sizeof(MapStencilOp) / sizeof(D3D11_STENCIL_OP)) == static_cast<size_t>(StencilOp::Count), "Mapping is broken!");
 
+//=============================================================================
+static inline void* sgfx_malloc(size_t size)
+{
+    return malloc(size);
+}
+
+static inline void sgfx_free(void* ptr)
+{
+    return free(ptr);
+}
 
 //=============================================================================
 
 ID3D11Device*         g_pd3dDevice         = nullptr;
 ID3D11DeviceContext*  g_pImmediateContext  = nullptr;
 IDXGISwapChain*       g_pSwapChain         = nullptr;
+
+AllocFunc             g_allocFunc = sgfx_malloc;
+FreeFunc              g_freeFunc  = sgfx_free;
 
 //=============================================================================
 struct DXSharedBuffer final
@@ -416,6 +429,19 @@ static void dxProcessDrawQueue(internal::DrawQueue* queue)
     }
 }
 
+template <typename T, typename ...Args>
+static inline T* sgfx_new(Args&... args)
+{
+    return new (g_allocFunc(sizeof(T))) T(static_cast<Args&&>(args)...);
+}
+
+template <typename T>
+static inline void sgfx_delete(T* t)
+{
+    t->~T();
+    g_freeFunc(t);
+}
+
 //=============================================================================
 bool initD3D11(void* d3dDevice, void* d3dContext, void* d3dSwapChain)
 {
@@ -428,6 +454,22 @@ bool initD3D11(void* d3dDevice, void* d3dContext, void* d3dSwapChain)
 
 void shutdown()
 {}
+
+void setAllocator(AllocFunc nalloc, FreeFunc nfree)
+{
+    g_allocFunc = nalloc;
+    g_freeFunc  = nfree;
+}
+
+void* allocate(size_t size)
+{
+    return g_allocFunc(size);
+}
+
+void deallocate(void* ptr)
+{
+    return g_freeFunc(ptr);
+}
 
 uint64_t getGPUCaps()
 {
@@ -546,18 +588,18 @@ bool compileShader(
 
     if (FAILED(hr)) {
         if (errorReport != nullptr && errorBlob != nullptr) {
-            char* error = new char[errorBlob->GetBufferSize() + 1];
+            char* error = reinterpret_cast<char*>(allocate(errorBlob->GetBufferSize() + 1));
             std::memcpy(error, errorBlob->GetBufferPointer(), errorBlob->GetBufferSize());
             error[errorBlob->GetBufferSize()] = '\0';
             errorReport(error);
-            delete [] error;
+            deallocate(error);
         }
         if (errorBlob != nullptr) errorBlob->Release();
         return false;
     }
 
     outDataSize = outBlob->GetBufferSize();
-    outData = new uint8_t[outDataSize];
+    outData = reinterpret_cast<uint8_t*>(allocate(outDataSize));
     std::memcpy(outData, outBlob->GetBufferPointer(), outDataSize);
     outBlob->Release();
 
@@ -652,7 +694,7 @@ void releasePixelShader(PixelShaderHandle handle)
 
 SurfaceShaderHandle linkSurfaceShader(VertexShaderHandle vs, HullShaderHandle hs, DomainShaderHandle ds, GeometryShaderHandle gs, PixelShaderHandle ps)
 {
-    SurfaceShaderImpl* impl = new SurfaceShaderImpl;
+    SurfaceShaderImpl* impl = sgfx::sgfx_new<SurfaceShaderImpl>();
     impl->vs = static_cast<ID3D11VertexShader*>(vs.value);
     impl->hs = static_cast<ID3D11HullShader*>(hs.value);
     impl->ds = static_cast<ID3D11DomainShader*>(ds.value);
@@ -665,7 +707,7 @@ void releaseSurfaceShader(SurfaceShaderHandle handle)
 {
     if (handle != SurfaceShaderHandle::invalidHandle()) {
         SurfaceShaderImpl* impl = static_cast<SurfaceShaderImpl*>(handle.value);
-        delete impl;
+        sgfx_delete(impl);
     }
 }
 
@@ -734,7 +776,7 @@ VertexFormatHandle createVertexFormat(
         return VertexFormatHandle::invalidHandle();
     }
 
-    VertexFormatImpl* impl = new VertexFormatImpl;
+    VertexFormatImpl* impl = sgfx_new<VertexFormatImpl>();
     impl->inputLayout = layout;
     impl->stride      = stride;
     return VertexFormatHandle(impl);
@@ -745,7 +787,7 @@ void releaseVertexFormat(VertexFormatHandle handle)
     if (handle != VertexFormatHandle::invalidHandle()) {
         VertexFormatImpl* impl = static_cast<VertexFormatImpl*>(handle.value);
         impl->inputLayout->Release();
-        delete impl;
+        sgfx_delete(impl);
     }
 }
 
@@ -832,7 +874,7 @@ PipelineStateHandle createPipelineState(const PipelineStateDescriptor& desc)
         return PipelineStateHandle::invalidHandle();
     }
 
-    PipelineStateImpl* impl = new PipelineStateImpl;
+    PipelineStateImpl* impl = sgfx::sgfx_new<PipelineStateImpl>();
     impl->rasterizerState   = rasterizerState;
     impl->blendState        = blendState;
     impl->depthStencilState = depthStencilState;
@@ -852,7 +894,7 @@ void releasePipelineState(PipelineStateHandle handle)
         impl->rasterizerState->Release();
         impl->blendState->Release();
         impl->depthStencilState->Release();
-        delete impl;
+        sgfx::sgfx_delete(impl);
     }
 }
 
@@ -913,7 +955,7 @@ BufferHandle createBuffer(uint32_t flags, const void* mem, size_t size, size_t s
         return BufferHandle::invalidHandle();
     }
 
-    DXSharedBuffer* buffer = new DXSharedBuffer;
+    DXSharedBuffer* buffer = sgfx_new<DXSharedBuffer>();
     buffer->dataBuffer = d3dbuffer;
 
     if (isStructured) buffer->createView(size / stride);
@@ -926,7 +968,7 @@ void releaseBuffer(BufferHandle handle)
 {
     if (handle != BufferHandle::invalidHandle()) {
         DXSharedBuffer* buffer = static_cast<DXSharedBuffer*>(handle.value);
-        delete buffer;
+        sgfx::sgfx_delete(buffer);
     }
 }
 
@@ -1099,7 +1141,7 @@ Texture1DHandle createTexture1D(uint32_t width, DataFormat format, uint32_t numM
         return Texture1DHandle::invalidHandle();
     }
 
-    DXSharedBuffer* texture = new DXSharedBuffer;
+    DXSharedBuffer* texture = sgfx::sgfx_new<DXSharedBuffer>();
     texture->dataBuffer = d3dTexture;
     texture->dataView   = d3dResourceView;
 
@@ -1173,7 +1215,7 @@ Texture2DHandle createTexture2D(uint32_t width, uint32_t height, DataFormat form
         return Texture1DHandle::invalidHandle();
     }
 
-    DXSharedBuffer* texture = new DXSharedBuffer;
+    DXSharedBuffer* texture = sgfx::sgfx_new<DXSharedBuffer>();
     texture->dataBuffer = d3dTexture;
     texture->dataView   = d3dResourceView;
 
@@ -1223,7 +1265,7 @@ Texture3DHandle createTexture3D(uint32_t width, uint32_t height, uint32_t depth,
         return Texture1DHandle::invalidHandle();
     }
 
-    DXSharedBuffer* texture = new DXSharedBuffer;
+    DXSharedBuffer* texture = sgfx::sgfx_new<DXSharedBuffer>();
     texture->dataBuffer = d3dTexture;
     texture->dataView   = d3dResourceView;
 
@@ -1258,13 +1300,13 @@ void releaseTexture(TextureHandle handle)
 {
     if (handle != TextureHandle::invalidHandle()) {
         DXSharedBuffer* texture = static_cast<DXSharedBuffer*>(handle.value);
-        delete texture;
+        sgfx::sgfx_delete(texture);
     }
 }
 
 Texture2DHandle getBackBuffer()
 {
-    DXSharedBuffer* buffer = new DXSharedBuffer;
+    DXSharedBuffer* buffer = sgfx_new<DXSharedBuffer>();
     if (FAILED(g_pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), (LPVOID*)&buffer->dataBuffer))) {
         // TODO: error handling
         return Texture2DHandle::invalidHandle();
@@ -1275,7 +1317,7 @@ Texture2DHandle getBackBuffer()
 
 RenderTargetHandle createRenderTarget(const RenderTargetDescriptor& desc)
 {
-    RenderTargetImpl* impl = new RenderTargetImpl;
+    RenderTargetImpl* impl = sgfx_new<RenderTargetImpl>();
 
     impl->numRenderTargets = desc.numColorTextures;
 
@@ -1292,7 +1334,7 @@ RenderTargetHandle createRenderTarget(const RenderTargetDescriptor& desc)
         ID3D11RenderTargetView* renderTargetView = nullptr;
         if (FAILED(g_pd3dDevice->CreateRenderTargetView(textureResource->dataBuffer, &rtDesc, &renderTargetView))) {
             // TODO: error handling
-            delete impl;
+            sgfx_delete(impl);
             return RenderTargetHandle::invalidHandle();
         }
 
@@ -1323,7 +1365,7 @@ RenderTargetHandle createRenderTarget(const RenderTargetDescriptor& desc)
         ID3D11DepthStencilView* depthStencilView = nullptr;
         if (FAILED(g_pd3dDevice->CreateDepthStencilView(depthStencilResource->dataBuffer, &dsDesc, &depthStencilView))) {
             // TODO: error handling
-            delete impl;
+            sgfx_delete(impl);
             return RenderTargetHandle::invalidHandle();
         }
 
@@ -1337,7 +1379,7 @@ void releaseRenderTarget(RenderTargetHandle handle)
 {
     if (handle != RenderTargetHandle::invalidHandle()) {
         RenderTargetImpl* rtimpl = static_cast<RenderTargetImpl*>(handle.value);
-        delete rtimpl;
+        sgfx_delete(rtimpl);
     }
 }
 
@@ -1419,7 +1461,7 @@ void present(uint32_t swapInterval)
 
 DrawQueueHandle createDrawQueue(PipelineStateHandle state)
 {
-    internal::DrawQueue* queue = new internal::DrawQueue(state);
+    internal::DrawQueue* queue = sgfx_new<internal::DrawQueue>(state);
     return DrawQueueHandle(queue);
 }
 
@@ -1427,7 +1469,7 @@ void releaseDrawQueue(DrawQueueHandle handle)
 {
     if (handle != DrawQueueHandle::invalidHandle()) {
         internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
-        delete queue;
+        sgfx_delete(queue);
     }
 }
 

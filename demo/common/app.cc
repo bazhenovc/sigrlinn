@@ -68,7 +68,7 @@ sgfx::VertexShaderHandle Application::loadVS(const char* path)
     if (loadShader(path, sgfx::ShaderCompileTarget::VS, bytecode, bytecodeSize)) {
         sgfx::VertexShaderHandle vs = sgfx::createVertexShader(bytecode, bytecodeSize);
         OutputDebugString("Vertex shader compiled.\n");
-        delete [] bytecode;
+        sgfx::deallocate(bytecode);
         return vs;
     }
 
@@ -83,7 +83,7 @@ sgfx::GeometryShaderHandle Application::loadGS(const char* path)
     if (loadShader(path, sgfx::ShaderCompileTarget::GS, bytecode, bytecodeSize)) {
         sgfx::GeometryShaderHandle ret = sgfx::createGeometryShader(bytecode, bytecodeSize);
         OutputDebugString("Geometry shader compiled.\n");
-        delete [] bytecode;
+        sgfx::deallocate(bytecode);
         return ret;
     }
 
@@ -98,7 +98,7 @@ sgfx::PixelShaderHandle Application::loadPS(const char* path)
     if (loadShader(path, sgfx::ShaderCompileTarget::PS, bytecode, bytecodeSize)) {
         sgfx::PixelShaderHandle ret = sgfx::createPixelShader(bytecode, bytecodeSize);
         OutputDebugString("Pixel shader compiled.\n");
-        delete [] bytecode;
+        sgfx::deallocate(bytecode);
         return ret;
     }
 
@@ -113,7 +113,7 @@ sgfx::ComputeShaderHandle Application::loadCS(const char* path)
     if (loadShader(path, sgfx::ShaderCompileTarget::CS, bytecode, bytecodeSize)) {
         sgfx::ComputeShaderHandle ret = sgfx::createComputeShader(bytecode, bytecodeSize);
         OutputDebugString("Compute shader compiled.\n");
-        delete [] bytecode;
+        sgfx::deallocate(bytecode);
         return ret;
     }
 
@@ -133,7 +133,7 @@ sgfx::VertexFormatHandle Application::loadVF(sgfx::VertexElementDescriptor* vfEl
             bytecode, bytecodeSize,
             Application::genericErrorReporter
         );
-        delete [] bytecode;
+        sgfx::deallocate(bytecode);
     }
 
     return ret;
