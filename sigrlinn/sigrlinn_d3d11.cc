@@ -524,7 +524,7 @@ bool compileShader(
     D3D_SHADER_MACRO* d3dmacros = nullptr;
 
     if (macros != nullptr) {
-        size_t totalSize = macrosSize + sizeof(D3D_SHADER_MACRO);
+        size_t totalSize = macrosSize * sizeof(D3D_SHADER_MACRO) + sizeof(D3D_SHADER_MACRO);
         d3dmacros = reinterpret_cast<D3D_SHADER_MACRO*>(alloca(totalSize));
         std::memset(d3dmacros, 0, totalSize);
 
