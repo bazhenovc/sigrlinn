@@ -562,14 +562,14 @@ static void GL_processDrawQueue(internal::DrawQueue* queue)
             SRV_Buffer
         };
 
-        size_t count = 0;
-        GLuint shaderResources[internal::DrawCall::kMaxShaderResources] = { 0 };
+        GLsizei count = 0;
+        GLuint  shaderResources[internal::DrawCall::kMaxShaderResources] = { 0 };
         
         SRVType prevType    = call.shaderResources[0].isTexture ? SRV_Texture : SRV_Buffer;
         SRVType currentType = SRV_None;
-        size_t  lastIndex   = 0;
+        GLsizei lastIndex   = 0;
 
-        for (size_t i = 0; i < internal::DrawCall::kMaxShaderResources; ++i) {
+        for (GLsizei i = 0; i < internal::DrawCall::kMaxShaderResources; ++i) {
             const internal::ShaderResource& resource = call.shaderResources[i];
 
             if (resource.isTexture)

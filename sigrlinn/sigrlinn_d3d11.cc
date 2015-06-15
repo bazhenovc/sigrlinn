@@ -32,6 +32,10 @@
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "d3dcompiler.lib")
 
+#ifdef SGFX_USE_D3D11_1
+#include <d3d11_1.h>
+#endif
+
 namespace sgfx
 {
 
@@ -209,6 +213,10 @@ IDXGISwapChain*       g_pSwapChain         = nullptr;
 
 AllocFunc             g_allocFunc = sgfx_malloc;
 FreeFunc              g_freeFunc  = sgfx_free;
+
+#ifdef SGFX_USE_D3D11_1
+ID3DUserDefinedAnnotation* g_debugAnnotation = nullptr;
+#endif
 
 //=============================================================================
 struct DXSharedBuffer final
@@ -449,11 +457,22 @@ bool initD3D11(void* d3dDevice, void* d3dContext, void* d3dSwapChain)
     g_pImmediateContext = static_cast<ID3D11DeviceContext*>(d3dContext);
     g_pSwapChain        = static_cast<IDXGISwapChain*>(d3dSwapChain);
 
+#ifdef SGFX_USE_D3D11_1
+    HRESULT hr = g_pImmediateContext->QueryInterface(&g_debugAnnotation);
+    if (FAILED(hr))
+        g_debugAnnotation = nullptr; // probably redundant
+#endif
+
     return true;
 }
 
 void shutdown()
-{}
+{
+#ifdef SGFX_USE_D3D11_1
+    if (g_debugAnnotation)
+        g_debugAnnotation->Release();
+#endif
+}
 
 void setAllocator(AllocFunc nalloc, FreeFunc nfree)
 {
@@ -524,7 +543,7 @@ bool compileShader(
     D3D_SHADER_MACRO* d3dmacros = nullptr;
 
     if (macros != nullptr) {
-        size_t totalSize = macrosSize + sizeof(D3D_SHADER_MACRO);
+        size_t totalSize = macrosSize * sizeof(D3D_SHADER_MACRO) + sizeof(D3D_SHADER_MACRO);
         d3dmacros = reinterpret_cast<D3D_SHADER_MACRO*>(alloca(totalSize));
         std::memset(d3dmacros, 0, totalSize);
 
@@ -1304,6 +1323,36 @@ void releaseTexture(TextureHandle handle)
     }
 }
 
+void copyResource(TextureHandle src, TextureHandle dst)
+{
+    if (src != dst && src != TextureHandle::invalidHandle()) {
+        DXSharedBuffer* dxSrc = static_cast<DXSharedBuffer*>(src.value);
+        DXSharedBuffer* dxDst = static_cast<DXSharedBuffer*>(dst.value);
+
+        g_pImmediateContext->CopyResource(dxDst->dataBuffer, dxSrc->dataBuffer);
+    }
+}
+
+void copyResource(BufferHandle src, BufferHandle dst)
+{
+    if (src != dst && src != BufferHandle::invalidHandle()) {
+        DXSharedBuffer* dxSrc = static_cast<DXSharedBuffer*>(src.value);
+        DXSharedBuffer* dxDst = static_cast<DXSharedBuffer*>(dst.value);
+
+        g_pImmediateContext->CopyResource(dxDst->dataBuffer, dxSrc->dataBuffer);
+    }
+}
+
+void copyResource(ConstantBufferHandle src, ConstantBufferHandle dst)
+{
+    if (src != dst && src != ConstantBufferHandle::invalidHandle()) {
+        ID3D11Buffer* dxSrc = static_cast<ID3D11Buffer*>(src.value);
+        ID3D11Buffer* dxDst = static_cast<ID3D11Buffer*>(dst.value);
+
+        g_pImmediateContext->CopyResource(dxDst, dxSrc);
+    }
+}
+
 Texture2DHandle getBackBuffer()
 {
     DXSharedBuffer* buffer = sgfx_new<DXSharedBuffer>();
@@ -1565,9 +1614,27 @@ void submit(DrawQueueHandle handle)
 {
     if (handle != DrawQueueHandle::invalidHandle()) {
         internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
-        dxProcessDrawQueue(queue);
-        queue->clear();
+        if (queue->getDrawCalls().GetSize() != 0) {
+            dxProcessDrawQueue(queue);
+            queue->clear();
+        }
     }
+}
+
+void beginPerfEvent(const wchar_t* name)
+{
+#ifdef SGFX_USE_D3D11_1
+    if (g_debugAnnotation)
+        g_debugAnnotation->BeginEvent(name);
+#endif
+}
+
+void endPerfEvent()
+{
+#ifdef SGFX_USE_D3D11_1
+    if (g_debugAnnotation)
+        g_debugAnnotation->EndEvent();
+#endif
 }
 
 }
