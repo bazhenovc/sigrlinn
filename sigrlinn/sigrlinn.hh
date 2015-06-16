@@ -424,6 +424,7 @@ typedef void(*ErrorReportFunc)(const char*);
 
 //=============================================================================
 bool initD3D11(void* d3dDevice, void* d3dContext, void* d3dSwapChain);
+bool initD3D12(void* d3dDevice);
 bool initOpenGL();
 #ifdef NDA_CODE_AMD_MANTLE
 // NDACodeStripper v0.17: 1 line removed
