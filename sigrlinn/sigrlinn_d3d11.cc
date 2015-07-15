@@ -266,7 +266,130 @@ struct DXSharedBuffer final
 };
 
 //=============================================================================
+struct DXStateCache final
+{
+    enum
+    {
+        SC_Draw = 0,
+        SC_Compute = 1
+    };
 
+    uint32_t type;
+
+    ID3D11SamplerState*         samplerStates[internal::DrawQueue::kMaxSamplerStates];
+    ID3D11Buffer*               constantBuffers[internal::DrawCall::kMaxConstantBuffers];
+    ID3D11ShaderResourceView*   shaderResourceViews[internal::DrawCall::kMaxShaderResources];
+    ID3D11UnorderedAccessView*  shaderUAVs[internal::ComputeQueue::kMaxShaderResourcesRW];
+
+    bool vs = false;
+    bool hs = false;
+    bool ds = false;
+    bool gs = false;
+    bool ps = false;
+
+    inline DXStateCache(uint32_t newType)
+    {
+        clear();
+
+        type = newType;
+    }
+
+    inline void clear()
+    {
+        std::memset(samplerStates, 0, sizeof(samplerStates));
+        std::memset(constantBuffers, 0, sizeof(constantBuffers));
+        std::memset(shaderResourceViews, 0, sizeof(shaderResourceViews));
+        std::memset(shaderUAVs, 0, sizeof(shaderUAVs));
+    }
+
+    inline void setSamplerStates(const SamplerStateHandle* handles)
+    {
+        for (size_t i = 0; i < internal::DrawQueue::kMaxSamplerStates; ++i) {
+            ID3D11SamplerState* state = static_cast<ID3D11SamplerState*>(handles[i].value);
+            if (state != samplerStates[i]) {
+                samplerStates[i] = state;
+
+                if (type == SC_Draw) {
+                    if (vs) g_pImmediateContext->VSSetSamplers(i, 1, &state);
+                    if (hs) g_pImmediateContext->HSSetSamplers(i, 1, &state);
+                    if (ds) g_pImmediateContext->DSSetSamplers(i, 1, &state);
+                    if (gs) g_pImmediateContext->GSSetSamplers(i, 1, &state);
+                    if (ps) g_pImmediateContext->PSSetSamplers(i, 1, &state);
+                }
+
+                if (type == SC_Compute)
+                    g_pImmediateContext->CSSetSamplers(i, 1, &state);
+            }
+        }
+    }
+
+    inline void setConstantBuffers(const ConstantBufferHandle* handles)
+    {
+        for (size_t i = 0; i < internal::DrawCall::kMaxConstantBuffers; ++i) {
+            ID3D11Buffer* state = static_cast<ID3D11Buffer*>(handles[i].value);
+            if (state != constantBuffers[i]) {
+                constantBuffers[i] = state;
+
+                if (type == SC_Draw) {
+                    if (vs) g_pImmediateContext->VSSetConstantBuffers(i, 1, &state);
+                    if (hs) g_pImmediateContext->HSSetConstantBuffers(i, 1, &state);
+                    if (ds) g_pImmediateContext->DSSetConstantBuffers(i, 1, &state);
+                    if (gs) g_pImmediateContext->GSSetConstantBuffers(i, 1, &state);
+                    if (ps) g_pImmediateContext->PSSetConstantBuffers(i, 1, &state);
+                }
+
+                if (type == SC_Compute)
+                    g_pImmediateContext->CSSetConstantBuffers(i, 1, &state);
+            }
+        }
+    }
+
+    inline void setShaderResources(const internal::ShaderResource* resources)
+    {
+        for (size_t i = 0; i < internal::DrawCall::kMaxShaderResources; ++i) {
+            DXSharedBuffer* buffer = static_cast<DXSharedBuffer*>(resources[i].value);
+
+            ID3D11ShaderResourceView* state = nullptr;
+            if (buffer != nullptr)
+                state = buffer->dataView;
+
+            if (state != shaderResourceViews[i]) {
+                shaderResourceViews[i] = state;
+
+                if (type == SC_Draw) {
+                    if (vs) g_pImmediateContext->VSSetShaderResources(i, 1, &state);
+                    if (hs) g_pImmediateContext->HSSetShaderResources(i, 1, &state);
+                    if (ds) g_pImmediateContext->DSSetShaderResources(i, 1, &state);
+                    if (gs) g_pImmediateContext->GSSetShaderResources(i, 1, &state);
+                    if (ps) g_pImmediateContext->PSSetShaderResources(i, 1, &state);
+                }
+
+                if (type == SC_Compute)
+                    g_pImmediateContext->CSSetShaderResources(i, 1, &state);
+            }
+        }
+    }
+
+    inline void setShaderResourcesRW(internal::ShaderResource* resources)
+    {
+        for (size_t i = 0; i < internal::ComputeQueue::kMaxShaderResourcesRW; ++i) {
+            DXSharedBuffer* buffer = static_cast<DXSharedBuffer*>(resources[i].value);
+
+            ID3D11UnorderedAccessView* state = nullptr;
+            if (buffer != nullptr)
+                state = buffer->dataUAV;
+
+            if (state != shaderUAVs[i]) {
+                shaderUAVs[i] = state;
+
+                g_pImmediateContext->CSSetUnorderedAccessViews(i, 1, &state, nullptr);
+            }
+        }
+    }
+};
+
+
+//=============================================================================
 struct VertexFormatImpl final
 {
     ID3D11InputLayout* inputLayout;
@@ -293,6 +416,9 @@ struct PipelineStateImpl final
 
     // additional stuff passed as parameters
     UINT                     stencilRef;
+
+    // state cache
+    DXStateCache             stateCache = DXStateCache(DXStateCache::SC_Draw);
 };
 
 struct RenderTargetImpl final
@@ -373,17 +499,7 @@ static void dxProcessDrawQueue(internal::DrawQueue* queue)
 
     dxSetPipelineState(queue->getState());
 
-    ID3D11SamplerState* samplerStates[internal::DrawQueue::kMaxSamplerStates] = { nullptr };
-    for (size_t i = 0; i < internal::DrawQueue::kMaxSamplerStates; ++i) {
-        ID3D11SamplerState* sampler = static_cast<ID3D11SamplerState*>(queue->samplerStates[i].value);
-        samplerStates[i] = sampler;
-    }
-
-    g_pImmediateContext->VSSetSamplers(0, internal::DrawQueue::kMaxSamplerStates, samplerStates);
-    g_pImmediateContext->HSSetSamplers(0, internal::DrawQueue::kMaxSamplerStates, samplerStates);
-    g_pImmediateContext->DSSetSamplers(0, internal::DrawQueue::kMaxSamplerStates, samplerStates);
-    g_pImmediateContext->GSSetSamplers(0, internal::DrawQueue::kMaxSamplerStates, samplerStates);
-    g_pImmediateContext->PSSetSamplers(0, internal::DrawQueue::kMaxSamplerStates, samplerStates);
+    psimpl->stateCache.setSamplerStates(queue->samplerStates);
 
     // process draw calls
     for (const internal::DrawCall& call: queue->getDrawCalls()) {
@@ -405,32 +521,11 @@ static void dxProcessDrawQueue(internal::DrawQueue* queue)
             g_pImmediateContext->IASetIndexBuffer(ibuffer, DXGI_FORMAT_R32_UINT, 0); // TODO: different index format
         }
 
-        // constant buffers are ID3D11Buffers effectively
-        ID3D11Buffer* constantBuffers[internal::DrawCall::kMaxConstantBuffers] = { nullptr };
-        for (size_t i = 0; i < internal::DrawCall::kMaxConstantBuffers; ++i)
-            constantBuffers[i] = static_cast<ID3D11Buffer*>(call.constantBuffers[i].value);
-
-        // TODO: add statecache here!
-        g_pImmediateContext->VSSetConstantBuffers(0, internal::DrawCall::kMaxConstantBuffers, constantBuffers);
-        g_pImmediateContext->HSSetConstantBuffers(0, internal::DrawCall::kMaxConstantBuffers, constantBuffers);
-        g_pImmediateContext->DSSetConstantBuffers(0, internal::DrawCall::kMaxConstantBuffers, constantBuffers);
-        g_pImmediateContext->GSSetConstantBuffers(0, internal::DrawCall::kMaxConstantBuffers, constantBuffers);
-        g_pImmediateContext->PSSetConstantBuffers(0, internal::DrawCall::kMaxConstantBuffers, constantBuffers);
+        // constant buffers
+        psimpl->stateCache.setConstantBuffers(call.constantBuffers);
 
         // shader resources and textures
-        ID3D11ShaderResourceView* shaderResources[internal::DrawCall::kMaxShaderResources] = { nullptr };
-        for (size_t i = 0; i < internal::DrawCall::kMaxShaderResources; ++i) {
-            DXSharedBuffer* buffer = static_cast<DXSharedBuffer*>(call.shaderResources[i].value);
-            if (buffer != nullptr)
-                shaderResources[i] = buffer->dataView;
-        }
-
-        // TODO: add statecache here!
-        g_pImmediateContext->VSSetShaderResources(0, internal::DrawCall::kMaxShaderResources, shaderResources);
-        g_pImmediateContext->HSSetShaderResources(0, internal::DrawCall::kMaxShaderResources, shaderResources);
-        g_pImmediateContext->DSSetShaderResources(0, internal::DrawCall::kMaxShaderResources, shaderResources);
-        g_pImmediateContext->GSSetShaderResources(0, internal::DrawCall::kMaxShaderResources, shaderResources);
-        g_pImmediateContext->PSSetShaderResources(0, internal::DrawCall::kMaxShaderResources, shaderResources);
+        psimpl->stateCache.setShaderResources(call.shaderResources);
 
         switch (call.type) {
         case internal::DrawCall::Draw:                 { g_pImmediateContext->Draw(call.count, call.startVertex); } break;
@@ -439,6 +534,8 @@ static void dxProcessDrawQueue(internal::DrawQueue* queue)
         case internal::DrawCall::DrawIndexedInstanced: { g_pImmediateContext->DrawIndexedInstanced(call.count, call.instanceCount, call.startIndex, call.startVertex, 0); } break;
         }
     }
+
+    psimpl->stateCache.clear();
 }
 
 template <typename T, typename ...Args>
@@ -989,6 +1086,12 @@ PipelineStateHandle createPipelineState(const PipelineStateDescriptor& desc)
     impl->vertexFormat = static_cast<VertexFormatImpl*>(desc.vertexFormat.value);
 
     impl->stencilRef = dsState.stencilRef;
+
+    impl->stateCache.vs = impl->shader->vs != nullptr;
+    impl->stateCache.hs = impl->shader->hs != nullptr;
+    impl->stateCache.ds = impl->shader->ds != nullptr;
+    impl->stateCache.gs = impl->shader->gs != nullptr;
+    impl->stateCache.ps = impl->shader->ps != nullptr;
 
     return PipelineStateHandle(impl);
 }
