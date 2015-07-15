@@ -20,13 +20,17 @@
 /// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 /// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 /// THE SOFTWARE.
-#include "sigrlinn.hh"
-#include "private/drawqueue.hh"
-#include "private/computequeue.hh"
-
 #include <d3d11.h>
 #include <d3dcompiler.h>
 #include <memory>
+
+#ifndef SGFX_D3D11_INTEROP
+#define SGFX_D3D11_INTEROP 1
+#endif
+
+#include "sigrlinn.hh"
+#include "private/drawqueue.hh"
+#include "private/computequeue.hh"
 
 #include <stdlib.h>
 
@@ -1826,6 +1830,94 @@ void endPerfEvent()
     if (g_debugAnnotation)
         g_debugAnnotation->EndEvent();
 #endif
+}
+
+// D3D11 interop
+namespace d3d11
+{
+
+ID3D11Buffer* getNativeBuffer(ConstantBufferHandle handle)
+{
+    return static_cast<ID3D11Buffer*>(handle.value);
+}
+
+ID3D11Resource* getNativeResource(BufferHandle handle)
+{
+    if (handle != BufferHandle::invalidHandle()) {
+        DXSharedBuffer* buffer = static_cast<DXSharedBuffer*>(handle.value);
+        return buffer->dataBuffer;
+    }
+    return nullptr;
+}
+
+ID3D11ShaderResourceView* getNativeSRV(BufferHandle handle)
+{
+    if (handle != BufferHandle::invalidHandle()) {
+        DXSharedBuffer* buffer = static_cast<DXSharedBuffer*>(handle.value);
+        return buffer->dataView;
+    }
+    return nullptr;
+}
+
+ID3D11UnorderedAccessView* getNativeUAV(BufferHandle handle)
+{
+    if (handle != BufferHandle::invalidHandle()) {
+        DXSharedBuffer* buffer = static_cast<DXSharedBuffer*>(handle.value);
+        return buffer->dataUAV;
+    }
+    return nullptr;
+}
+
+ID3D11Resource* getNativeResource(TextureHandle handle)
+{
+    if (handle != TextureHandle::invalidHandle()) {
+        DXSharedBuffer* buffer = static_cast<DXSharedBuffer*>(handle.value);
+        return buffer->dataBuffer;
+    }
+    return nullptr;
+}
+
+ID3D11ShaderResourceView* getNativeSRV(TextureHandle handle)
+{
+    if (handle != TextureHandle::invalidHandle()) {
+        DXSharedBuffer* buffer = static_cast<DXSharedBuffer*>(handle.value);
+        return buffer->dataView;
+    }
+    return nullptr;
+}
+
+ID3D11UnorderedAccessView* getNativeUAV(TextureHandle handle)
+{
+    if (handle != TextureHandle::invalidHandle()) {
+        DXSharedBuffer* buffer = static_cast<DXSharedBuffer*>(handle.value);
+        return buffer->dataUAV;
+    }
+    return nullptr;
+}
+
+ID3D11SamplerState* getNativeSamplerState(SamplerStateHandle handle)
+{
+    return static_cast<ID3D11SamplerState*>(handle.value);
+}
+
+ID3D11RenderTargetView* getNativeRTV(RenderTargetHandle handle, size_t idx)
+{
+    if (handle != RenderTargetHandle::invalidHandle()) {
+        RenderTargetImpl* impl = static_cast<RenderTargetImpl*>(handle.value);
+        return impl->renderTargetViews[idx];
+    }
+    return nullptr;
+}
+
+ID3D11DepthStencilView* getNativeDSV(RenderTargetHandle handle)
+{
+    if (handle != RenderTargetHandle::invalidHandle()) {
+        RenderTargetImpl* impl = static_cast<RenderTargetImpl*>(handle.value);
+        return impl->depthStencilView;
+    }
+    return nullptr;
+}
+
 }
 
 }

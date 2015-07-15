@@ -623,4 +623,27 @@ void            submit(DrawQueueHandle handle);
 void            beginPerfEvent(const wchar_t* name);
 void            endPerfEvent();
 
+// optional interop with D3D11
+#ifdef SGFX_D3D11_INTEROP
+namespace d3d11
+{
+
+ID3D11Buffer*               getNativeBuffer(ConstantBufferHandle handle);
+
+ID3D11Resource*             getNativeResource(BufferHandle handle);
+ID3D11ShaderResourceView*   getNativeSRV(BufferHandle handle);
+ID3D11UnorderedAccessView*  getNativeUAV(BufferHandle handle);
+
+ID3D11Resource*             getNativeResource(TextureHandle handle);
+ID3D11ShaderResourceView*   getNativeSRV(TextureHandle handle);
+ID3D11UnorderedAccessView*  getNativeUAV(TextureHandle handle);
+
+ID3D11SamplerState*         getNativeSamplerState(SamplerStateHandle handle);
+
+ID3D11RenderTargetView*     getNativeRTV(RenderTargetHandle handle, size_t idx);
+ID3D11DepthStencilView*     getNativeDSV(RenderTargetHandle handle);
+
+}
+#endif
+
 }
