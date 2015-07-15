@@ -5,6 +5,7 @@ project(sigrlinn)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
 
 find_package(D3D11 REQUIRED)
+find_package(D3D12)
 
 file(GLOB src          sigrlinn/*.cc)
 file(GLOB hdr          sigrlinn/*.hh)
@@ -39,13 +40,22 @@ set(SGFX_GLEW_SRC
 include_directories(${CMAKE_SOURCE_DIR}/sigrlinn)
 include_directories(${CMAKE_SOURCE_DIR}/external/glm/)
 
+if(D3D12_FOUND)
+    message("D3D12 found")
+    add_library(SigrlinnD3D12 ${hdr} ${hdr_internal} ${src_internal} sigrlinn/sigrlinn_d3d12.cc)
+endif()
 add_library(SigrlinnD3D11 ${hdr} ${hdr_internal} ${src_internal} sigrlinn/sigrlinn_d3d11.cc)
-add_library(SigrlinnGL4 ${hdr} ${hdr_internal} ${src_internal} ${SGFX_GLEW_SRC} sigrlinn/sigrlinn_gl4.cc)
+add_library(SigrlinnGL4   ${hdr} ${hdr_internal} ${src_internal} ${SGFX_GLEW_SRC} sigrlinn/sigrlinn_gl4.cc)
 
 function(AddDemo Name Source)
 
     add_executable(${Name}D3D11 WIN32 ${Source} ${demo_common_src} ${demo_common_hdr} demo/win32_app.cc)
     target_link_libraries(${Name}D3D11 SigrlinnD3D11)
+
+    #if(D3D12_FOUND)
+    #    add_executable(${Name}D3D12 WIN32 ${Source} ${demo_common_src} ${demo_common_hdr} demo/win32_app.cc)
+    #    target_link_libraries(${Name}D3D12 SigrlinnD3D11)
+    #endif()
 
     #add_executable(${Name}GL4 ${Source} ${demo_common_src} ${demo_common_hdr} demo/win32_app.cc)
     #target_link_libraries(${Name}GL4 SigrlinnGL4)
@@ -54,4 +64,4 @@ endfunction()
 AddDemo(GrassDemo demo/demo_grass.cc)
 AddDemo(CubeDemo demo/demo_cube.cc)
 AddDemo(PBR demo/demo_pbr.cc)
-AddDemo(Terrain demo/demo_terrain.cc)
+#AddDemo(Terrain demo/demo_terrain.cc)

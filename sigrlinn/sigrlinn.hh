@@ -23,6 +23,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <wchar.h>
 
 namespace sgfx
 {
@@ -423,6 +424,7 @@ typedef void(*ErrorReportFunc)(const char*);
 
 //=============================================================================
 bool initD3D11(void* d3dDevice, void* d3dContext, void* d3dSwapChain);
+bool initD3D12(void* d3dDevice);
 bool initOpenGL();
 #ifdef NDA_CODE_AMD_MANTLE
 // NDACodeStripper v0.17: 1 line removed
@@ -559,6 +561,11 @@ void            updateTexture(
 );
 void            releaseTexture(TextureHandle handle);
 
+// async buffer copying
+void               copyResource(TextureHandle        src, TextureHandle        dst);
+void               copyResource(BufferHandle         src, BufferHandle         dst);
+void               copyResource(ConstantBufferHandle src, ConstantBufferHandle dst);
+
 // render targets
 Texture2DHandle    getBackBuffer();
 
@@ -597,5 +604,9 @@ void            drawInstanced(DrawQueueHandle dq, uint32_t instanceCount, uint32
 void            drawIndexedInstanced(DrawQueueHandle dq, uint32_t instanceCount, uint32_t count, uint32_t startIndex, uint32_t startVertex);
 
 void            submit(DrawQueueHandle handle);
+
+// performance markers
+void            beginPerfEvent(const wchar_t* name);
+void            endPerfEvent();
 
 }
