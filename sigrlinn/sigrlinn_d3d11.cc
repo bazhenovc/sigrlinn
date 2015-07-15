@@ -22,6 +22,7 @@
 /// THE SOFTWARE.
 #include "sigrlinn.hh"
 #include "private/drawqueue.hh"
+#include "private/computequeue.hh"
 
 #include <d3d11.h>
 #include <d3dcompiler.h>
@@ -47,7 +48,8 @@ static_assert((sizeof(MapMapType) / sizeof(D3D11_MAP)) == static_cast<uint32_t>(
 
 static D3D11_PRIMITIVE_TOPOLOGY MapPrimitiveTopology[PrimitiveTopology::Count] = {
     D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
-    D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP
+    D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP,
+    D3D11_PRIMITIVE_TOPOLOGY_POINTLIST
 };
 static_assert((sizeof(MapPrimitiveTopology) / sizeof(D3D11_PRIMITIVE_TOPOLOGY)) == static_cast<size_t>(PrimitiveTopology::Count), "Mapping is broken!");
 
@@ -226,8 +228,8 @@ struct DXSharedBuffer final
     ID3D11UnorderedAccessView* dataUAV        = 0;
     size_t                     dataBufferSize = 0;
 
-    DXSharedBuffer() {}
-    ~DXSharedBuffer()
+    inline DXSharedBuffer() {}
+    inline ~DXSharedBuffer()
     {
         if (dataBuffer != nullptr) dataBuffer->Release();
         if (dataView   != nullptr) dataView->Release();
@@ -408,6 +410,7 @@ static void dxProcessDrawQueue(internal::DrawQueue* queue)
         for (size_t i = 0; i < internal::DrawCall::kMaxConstantBuffers; ++i)
             constantBuffers[i] = static_cast<ID3D11Buffer*>(call.constantBuffers[i].value);
 
+        // TODO: add statecache here!
         g_pImmediateContext->VSSetConstantBuffers(0, internal::DrawCall::kMaxConstantBuffers, constantBuffers);
         g_pImmediateContext->HSSetConstantBuffers(0, internal::DrawCall::kMaxConstantBuffers, constantBuffers);
         g_pImmediateContext->DSSetConstantBuffers(0, internal::DrawCall::kMaxConstantBuffers, constantBuffers);
@@ -422,6 +425,7 @@ static void dxProcessDrawQueue(internal::DrawQueue* queue)
                 shaderResources[i] = buffer->dataView;
         }
 
+        // TODO: add statecache here!
         g_pImmediateContext->VSSetShaderResources(0, internal::DrawCall::kMaxShaderResources, shaderResources);
         g_pImmediateContext->HSSetShaderResources(0, internal::DrawCall::kMaxShaderResources, shaderResources);
         g_pImmediateContext->DSSetShaderResources(0, internal::DrawCall::kMaxShaderResources, shaderResources);
@@ -732,6 +736,96 @@ void releaseSurfaceShader(SurfaceShaderHandle handle)
     }
 }
 
+ComputeQueueHandle createComputeQueue(ComputeShaderHandle shader)
+{
+    internal::ComputeQueue* queue = sgfx::sgfx_new<internal::ComputeQueue>();
+    queue->shader = shader;
+
+    return ComputeQueueHandle(queue);
+}
+
+void releaseComputeQueue(ComputeQueueHandle handle)
+{
+    if (handle != ComputeQueueHandle::invalidHandle()) {
+        internal::ComputeQueue* queue = static_cast<internal::ComputeQueue*>(handle.value);
+        sgfx_delete(queue);
+    }
+}
+
+void setConstantBuffer(ComputeQueueHandle handle, uint32_t idx, ConstantBufferHandle buffer)
+{
+    if (handle != ComputeQueueHandle::invalidHandle()) {
+        internal::ComputeQueue* queue = static_cast<internal::ComputeQueue*>(handle.value);
+        queue->setConstantBuffer(idx, buffer);
+    }
+}
+
+void setResource(ComputeQueueHandle handle, uint32_t idx, BufferHandle resource)
+{
+    if (handle != ComputeQueueHandle::invalidHandle()) {
+        internal::ComputeQueue* queue = static_cast<internal::ComputeQueue*>(handle.value);
+        queue->setResource(idx, resource);
+    }
+}
+
+void setResource(ComputeQueueHandle handle, uint32_t idx, TextureHandle resource)
+{
+    if (handle != ComputeQueueHandle::invalidHandle()) {
+        internal::ComputeQueue* queue = static_cast<internal::ComputeQueue*>(handle.value);
+        queue->setResource(idx, resource);
+    }
+}
+
+void setResourceRW(ComputeQueueHandle handle, uint32_t idx, BufferHandle resource)
+{
+    if (handle != ComputeQueueHandle::invalidHandle()) {
+        internal::ComputeQueue* queue = static_cast<internal::ComputeQueue*>(handle.value);
+        queue->setResourceRW(idx, resource);
+    }
+}
+
+void submit(ComputeQueueHandle handle, uint32_t x, uint32_t y, uint32_t z)
+{
+    if (handle != ComputeQueueHandle::invalidHandle()) {
+        internal::ComputeQueue* queue   = static_cast<internal::ComputeQueue*>(handle.value);
+        ID3D11ComputeShader*    shader  = static_cast<ID3D11ComputeShader*>(queue->shader.value);
+
+        // constant buffers are ID3D11Buffers effectively
+        ID3D11Buffer* constantBuffers[internal::ComputeQueue::kMaxConstantBuffers] = { nullptr };
+        for (size_t i = 0; i < internal::ComputeQueue::kMaxConstantBuffers; ++i)
+            constantBuffers[i] = static_cast<ID3D11Buffer*>(queue->constantBuffers[i].value);
+
+        // TODO: add statecache here!
+        g_pImmediateContext->CSSetConstantBuffers(0, internal::ComputeQueue::kMaxConstantBuffers, constantBuffers);
+
+        // shader resources and textures
+        ID3D11ShaderResourceView* shaderResources[internal::ComputeQueue::kMaxShaderResources] = { nullptr };
+        for (size_t i = 0; i < internal::ComputeQueue::kMaxShaderResources; ++i) {
+            DXSharedBuffer* buffer = static_cast<DXSharedBuffer*>(queue->shaderResources[i].value);
+            if (buffer != nullptr)
+                shaderResources[i] = buffer->dataView;
+        }
+
+        // TODO: add statecache here!
+        g_pImmediateContext->CSSetShaderResources(0, internal::ComputeQueue::kMaxShaderResources, shaderResources);
+
+        // UAVs
+        ID3D11UnorderedAccessView* shaderUAVs[internal::ComputeQueue::kMaxShaderResourcesRW] = { nullptr };
+        for (size_t i = 0; i < internal::ComputeQueue::kMaxShaderResourcesRW; ++i) {
+            DXSharedBuffer* buffer = static_cast<DXSharedBuffer*>(queue->shaderResourcesRW[i].value);
+            if (buffer != nullptr)
+                shaderUAVs[i] = buffer->dataUAV;
+        }
+
+        // TODO: add statecache here!
+        g_pImmediateContext->CSSetUnorderedAccessViews(0, internal::ComputeQueue::kMaxShaderResourcesRW, shaderUAVs, nullptr);
+
+        // dispatch
+        g_pImmediateContext->CSSetShader(shader, nullptr, 0);
+        g_pImmediateContext->Dispatch(x, y, z);
+    }
+}
+
 ComputeShaderHandle createComputeShader(const void* data, size_t dataSize)
 {
     ID3D11ComputeShader* shader = nullptr;
@@ -746,15 +840,6 @@ void releaseComputeShader(ComputeShaderHandle handle)
     if (handle != ComputeShaderHandle::invalidHandle()) {
         ID3D11ComputeShader* shader = static_cast<ID3D11ComputeShader*>(handle.value);
         shader->Release();
-    }
-}
-
-void dispatchComputeShader(ComputeShaderHandle handle, uint32_t x, uint32_t y, uint32_t z)
-{
-    if (handle != ComputeShaderHandle::invalidHandle()) {
-        ID3D11ComputeShader* shader = static_cast<ID3D11ComputeShader*>(handle.value);
-        g_pImmediateContext->CSSetShader(shader, nullptr, 0);
-        g_pImmediateContext->Dispatch(x, y, z);
     }
 }
 
@@ -944,7 +1029,8 @@ BufferHandle createBuffer(uint32_t flags, const void* mem, size_t size, size_t s
 
     if (flags & BufferFlags::GPUWrite) {
         bufferUsage     = D3D11_USAGE_DEFAULT;
-        bufferMiscFlag |= D3D11_BIND_UNORDERED_ACCESS;
+        bufferBindFlag |= D3D11_BIND_UNORDERED_ACCESS;
+        bufferMiscFlag |= D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
         isUAV           = true;
     }
     if (flags & BufferFlags::CPURead) {

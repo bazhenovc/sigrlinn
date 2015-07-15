@@ -74,6 +74,9 @@ typedef Handle<void*, 14> ConstantBufferHandle;
 // draw queue
 typedef Handle<void*, 15> DrawQueueHandle;
 
+// compute queue
+typedef Handle<void*, 16> ComputeQueueHandle;
+
 // buffers
 namespace BufferFlags {
 enum : uint32_t {
@@ -107,6 +110,8 @@ enum class PrimitiveTopology : size_t
 {
     TriangleList,
     TriangleStrip,
+
+    PointList,
 
     Count
 };
@@ -516,9 +521,19 @@ SurfaceShaderHandle  linkSurfaceShader(
 );
 void releaseSurfaceShader(SurfaceShaderHandle handle);
 
+// compute shader stuff
+ComputeQueueHandle  createComputeQueue(ComputeShaderHandle shader);
+void                releaseComputeQueue(ComputeQueueHandle handle);
+
+void                setConstantBuffer(ComputeQueueHandle handle, uint32_t idx, ConstantBufferHandle buffer);
+void                setResource(ComputeQueueHandle handle, uint32_t idx, BufferHandle resource);
+void                setResource(ComputeQueueHandle handle, uint32_t idx, TextureHandle resource);
+void                setResourceRW(ComputeQueueHandle handle, uint32_t idx, BufferHandle resource);
+
+void                submit(ComputeQueueHandle handle, uint32_t x, uint32_t y, uint32_t z);
+
 ComputeShaderHandle createComputeShader(const void* data, size_t dataSize);
 void                releaseComputeShader(ComputeShaderHandle handle);
-void                dispatchComputeShader(ComputeShaderHandle handle, uint32_t x, uint32_t y, uint32_t z);
 
 // pipeline state
 VertexFormatHandle createVertexFormat(
@@ -595,7 +610,6 @@ void            setIndexBuffer(DrawQueueHandle dq, BufferHandle ib);
 void            setConstantBuffer(DrawQueueHandle handle, uint32_t idx, ConstantBufferHandle buffer);
 void            setResource(DrawQueueHandle handle, uint32_t idx, BufferHandle resource);
 void            setResource(DrawQueueHandle handle, uint32_t idx, TextureHandle resource);
-void            setResourceRW(DrawQueueHandle handle, uint32_t idx, BufferHandle resource);
 
 void            draw(DrawQueueHandle dq, uint32_t count, uint32_t startVertex);
 void            drawIndexed(DrawQueueHandle dq, uint32_t count, uint32_t startIndex, uint32_t startVertex);

@@ -50,7 +50,8 @@ static_assert((sizeof(MapMapType) / sizeof(GLenum)) == static_cast<uint32_t>(Map
 
 static GLenum MapPrimitiveTopology[PrimitiveTopology::Count] = {
     GL_TRIANGLES,
-    GL_TRIANGLE_STRIP
+    GL_TRIANGLE_STRIP,
+    GL_POINTS
 };
 static_assert((sizeof(MapPrimitiveTopology) / sizeof(GLenum)) == static_cast<size_t>(PrimitiveTopology::Count), "Mapping is broken!");
 
