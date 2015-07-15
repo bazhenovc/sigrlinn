@@ -525,7 +525,7 @@ bool compileShader(
 
     if (macros != nullptr) {
         size_t totalSize = macrosSize * sizeof(D3D_SHADER_MACRO) + sizeof(D3D_SHADER_MACRO);
-        d3dmacros = reinterpret_cast<D3D_SHADER_MACRO*>(alloca(totalSize));
+        d3dmacros = reinterpret_cast<D3D_SHADER_MACRO*>(allocate(totalSize));
         std::memset(d3dmacros, 0, totalSize);
 
         for (size_t i = 0; i < macrosSize; ++i) {
@@ -595,6 +595,7 @@ bool compileShader(
             deallocate(error);
         }
         if (errorBlob != nullptr) errorBlob->Release();
+        if (d3dmacros != nullptr) deallocate(d3dmacros);
         return false;
     }
 
@@ -603,6 +604,7 @@ bool compileShader(
     std::memcpy(outData, outBlob->GetBufferPointer(), outDataSize);
     outBlob->Release();
 
+    if (d3dmacros != nullptr) deallocate(d3dmacros);
     return true;
 }
 
