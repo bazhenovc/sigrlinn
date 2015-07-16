@@ -1462,9 +1462,9 @@ Texture2DHandle createTexture2D(uint32_t width, uint32_t height, DataFormat form
 
 Texture3DHandle createTexture3D(uint32_t width, uint32_t height, uint32_t depth, DataFormat format, uint32_t numMipmaps, uint32_t flags)
 {
-    UINT        bindFlags = D3D11_BIND_SHADER_RESOURCE;
-    D3D11_USAGE usageFlags = D3D11_USAGE_DEFAULT;
-    UINT        cpuAccess = 0;
+    UINT        bindFlags   = D3D11_BIND_SHADER_RESOURCE;
+    D3D11_USAGE usageFlags  = D3D11_USAGE_DEFAULT;
+    UINT        cpuAccess   = 0;
     bool        isStaging   = false;
 
     if (flags & TextureFlags::RenderTarget)
