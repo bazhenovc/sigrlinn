@@ -1141,7 +1141,7 @@ BufferHandle createBuffer(uint32_t flags, const void* mem, size_t size, size_t s
         isUAV           = true;
     }
     if (flags & BufferFlags::CPURead) {
-        bufferUsage     = D3D11_USAGE_DYNAMIC;
+        bufferUsage     = D3D11_USAGE_STAGING;
         bufferCPUFlags |= D3D11_CPU_ACCESS_READ;
     }
     if (flags & BufferFlags::CPUWrite) {
@@ -1315,12 +1315,22 @@ void releaseSamplerState(SamplerStateHandle handle)
 
 Texture1DHandle createTexture1D(uint32_t width, DataFormat format, uint32_t numMipmaps, uint32_t flags)
 {
-    UINT bindFlags = D3D11_BIND_SHADER_RESOURCE;
+    UINT        bindFlags   = D3D11_BIND_SHADER_RESOURCE;
+    D3D11_USAGE usageFlags  = D3D11_USAGE_DEFAULT;
+    UINT        cpuAccess   = 0;
+    bool        isStaging   = false;
 
     if (flags & TextureFlags::RenderTarget)
         bindFlags |= D3D11_BIND_RENDER_TARGET;
     if (flags & TextureFlags::DepthStencil)
         bindFlags |= D3D11_BIND_DEPTH_STENCIL;
+
+    if (flags & TextureFlags::CPURead) {
+        bindFlags   = 0;
+        usageFlags  = D3D11_USAGE_STAGING;
+        cpuAccess   = D3D11_CPU_ACCESS_READ;
+        isStaging   = true;
+    }
 
     D3D11_TEXTURE1D_DESC textureDesc;
     std::memset(&textureDesc, 0, sizeof(textureDesc));
@@ -1329,7 +1339,7 @@ Texture1DHandle createTexture1D(uint32_t width, DataFormat format, uint32_t numM
     textureDesc.MipLevels      = numMipmaps;
     textureDesc.ArraySize      = 1;
     textureDesc.Format         = MapDataFormat[static_cast<size_t>(format)];
-    textureDesc.Usage          = D3D11_USAGE_DEFAULT;
+    textureDesc.Usage          = usageFlags;
     textureDesc.BindFlags      = bindFlags;
     textureDesc.CPUAccessFlags = 0;
     textureDesc.MiscFlags      = 0;
@@ -1349,10 +1359,12 @@ Texture1DHandle createTexture1D(uint32_t width, DataFormat format, uint32_t numM
     //viewDesc.Texture1D.MostDetailedMip = -1;
 
     ID3D11ShaderResourceView* d3dResourceView = nullptr;
-    if (FAILED(g_pd3dDevice->CreateShaderResourceView(d3dTexture, &viewDesc, &d3dResourceView))) {
-        // TODO: error handling
-        d3dTexture->Release();
-        return Texture1DHandle::invalidHandle();
+    if (!isStaging) {
+        if (FAILED(g_pd3dDevice->CreateShaderResourceView(d3dTexture, &viewDesc, &d3dResourceView))) {
+            // TODO: error handling
+            d3dTexture->Release();
+            return Texture1DHandle::invalidHandle();
+        }
     }
 
     DXSharedBuffer* texture = sgfx::sgfx_new<DXSharedBuffer>();
@@ -1364,12 +1376,22 @@ Texture1DHandle createTexture1D(uint32_t width, DataFormat format, uint32_t numM
 
 Texture2DHandle createTexture2D(uint32_t width, uint32_t height, DataFormat format, uint32_t numMipmaps, uint32_t flags)
 {
-    UINT bindFlags = D3D11_BIND_SHADER_RESOURCE;
+    UINT        bindFlags   = D3D11_BIND_SHADER_RESOURCE;
+    D3D11_USAGE usageFlags  = D3D11_USAGE_DEFAULT;
+    UINT        cpuAccess   = 0;
+    bool        isStaging   = false;
 
     if (flags & TextureFlags::RenderTarget)
         bindFlags |= D3D11_BIND_RENDER_TARGET;
     if (flags & TextureFlags::DepthStencil)
         bindFlags |= D3D11_BIND_DEPTH_STENCIL;
+
+    if (flags & TextureFlags::CPURead) {
+        bindFlags   = 0;
+        usageFlags  = D3D11_USAGE_STAGING;
+        cpuAccess   = D3D11_CPU_ACCESS_READ;
+        isStaging   = true;
+    }
 
     DXGI_FORMAT dataFormat = MapDataFormat[static_cast<size_t>(format)];
 
@@ -1400,9 +1422,9 @@ Texture2DHandle createTexture2D(uint32_t width, uint32_t height, DataFormat form
     textureDesc.MipLevels      = numMipmaps;
     textureDesc.ArraySize      = 1;
     textureDesc.Format         = textureFormat;
-    textureDesc.Usage          = D3D11_USAGE_DEFAULT;
+    textureDesc.Usage          = usageFlags;
     textureDesc.BindFlags      = bindFlags;
-    textureDesc.CPUAccessFlags = 0;
+    textureDesc.CPUAccessFlags = cpuAccess;
     textureDesc.MiscFlags      = 0;
 
     textureDesc.SampleDesc.Count   = 1;
@@ -1423,10 +1445,12 @@ Texture2DHandle createTexture2D(uint32_t width, uint32_t height, DataFormat form
     //viewDesc.Texture2D.MostDetailedMip = -1;
 
     ID3D11ShaderResourceView* d3dResourceView = nullptr;
-    if (FAILED(g_pd3dDevice->CreateShaderResourceView(d3dTexture, &viewDesc, &d3dResourceView))) {
-        // TODO: error handling
-        d3dTexture->Release();
-        return Texture1DHandle::invalidHandle();
+    if (!isStaging) {
+        if (FAILED(g_pd3dDevice->CreateShaderResourceView(d3dTexture, &viewDesc, &d3dResourceView))) {
+            // TODO: error handling
+            d3dTexture->Release();
+            return Texture1DHandle::invalidHandle();
+        }
     }
 
     DXSharedBuffer* texture = sgfx::sgfx_new<DXSharedBuffer>();
@@ -1438,12 +1462,22 @@ Texture2DHandle createTexture2D(uint32_t width, uint32_t height, DataFormat form
 
 Texture3DHandle createTexture3D(uint32_t width, uint32_t height, uint32_t depth, DataFormat format, uint32_t numMipmaps, uint32_t flags)
 {
-    UINT bindFlags = D3D11_BIND_SHADER_RESOURCE;
+    UINT        bindFlags = D3D11_BIND_SHADER_RESOURCE;
+    D3D11_USAGE usageFlags = D3D11_USAGE_DEFAULT;
+    UINT        cpuAccess = 0;
+    bool        isStaging   = false;
 
     if (flags & TextureFlags::RenderTarget)
         bindFlags |= D3D11_BIND_RENDER_TARGET;
     if (flags & TextureFlags::DepthStencil)
         bindFlags |= D3D11_BIND_DEPTH_STENCIL;
+
+    if (flags & TextureFlags::CPURead) {
+        bindFlags   = 0;
+        usageFlags  = D3D11_USAGE_STAGING;
+        cpuAccess   = D3D11_CPU_ACCESS_READ;
+        isStaging   = true;
+    }
 
     D3D11_TEXTURE3D_DESC textureDesc;
     std::memset(&textureDesc, 0, sizeof(textureDesc));
@@ -1453,9 +1487,9 @@ Texture3DHandle createTexture3D(uint32_t width, uint32_t height, uint32_t depth,
     textureDesc.Depth          = depth;
     textureDesc.MipLevels      = numMipmaps;
     textureDesc.Format         = MapDataFormat[static_cast<size_t>(format)];
-    textureDesc.Usage          = D3D11_USAGE_DEFAULT;
+    textureDesc.Usage          = usageFlags;
     textureDesc.BindFlags      = bindFlags;
-    textureDesc.CPUAccessFlags = 0;
+    textureDesc.CPUAccessFlags = cpuAccess;
     textureDesc.MiscFlags      = 0;
 
     ID3D11Texture3D* d3dTexture = nullptr;
@@ -1473,10 +1507,12 @@ Texture3DHandle createTexture3D(uint32_t width, uint32_t height, uint32_t depth,
     //viewDesc.Texture3D.MostDetailedMip = -1;
 
     ID3D11ShaderResourceView* d3dResourceView = nullptr;
-    if (FAILED(g_pd3dDevice->CreateShaderResourceView(d3dTexture, &viewDesc, &d3dResourceView))) {
-        // TODO: error handling
-        d3dTexture->Release();
-        return Texture1DHandle::invalidHandle();
+    if (!isStaging) {
+        if (FAILED(g_pd3dDevice->CreateShaderResourceView(d3dTexture, &viewDesc, &d3dResourceView))) {
+            // TODO: error handling
+            d3dTexture->Release();
+            return Texture1DHandle::invalidHandle();
+        }
     }
 
     DXSharedBuffer* texture = sgfx::sgfx_new<DXSharedBuffer>();
@@ -1484,6 +1520,32 @@ Texture3DHandle createTexture3D(uint32_t width, uint32_t height, uint32_t depth,
     texture->dataView   = d3dResourceView;
 
     return Texture3DHandle(texture);
+}
+
+void* mapTexture(TextureHandle handle, MapType type)
+{
+    if (handle != TextureHandle::invalidHandle()) {
+        DXSharedBuffer* buffer = static_cast<DXSharedBuffer*>(handle.value);
+
+        D3D11_MAPPED_SUBRESOURCE mappedData;
+        std::memset(&mappedData, 0, sizeof(mappedData));
+
+        if (FAILED(g_pImmediateContext->Map(buffer->dataBuffer, 0, MapMapType[static_cast<size_t>(type)], 0, &mappedData))) {
+            return nullptr;
+        }
+
+        return mappedData.pData;
+    }
+    return nullptr;
+}
+
+void unmapTexture(TextureHandle handle)
+{
+    if (handle != TextureHandle::invalidHandle()) {
+        DXSharedBuffer* buffer = static_cast<DXSharedBuffer*>(handle.value);
+
+        g_pImmediateContext->Unmap(buffer->dataBuffer, 0);
+    }
 }
 
 void updateTexture(

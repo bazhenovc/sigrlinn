@@ -101,7 +101,8 @@ enum class MapType : size_t
 namespace TextureFlags {
 enum : uint32_t {
     RenderTarget = (1U << 0),
-    DepthStencil = (1U << 1)
+    DepthStencil = (1U << 1),
+    CPURead      = (1U << 2)
 };
 }
 
@@ -565,6 +566,9 @@ void               releaseSamplerState(SamplerStateHandle handle);
 Texture1DHandle createTexture1D(uint32_t width, DataFormat format, uint32_t numMipmaps, uint32_t flags);
 Texture2DHandle createTexture2D(uint32_t width, uint32_t height, DataFormat format, uint32_t numMipmaps, uint32_t flags);
 Texture3DHandle createTexture3D(uint32_t width, uint32_t height, uint32_t depth, DataFormat format, uint32_t numMipmaps, uint32_t flags);
+
+void*           mapTexture(TextureHandle handle, MapType type);
+void            unmapTexture(TextureHandle handle);
 
 void            updateTexture(
     TextureHandle handle, const void* mem,

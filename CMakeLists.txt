@@ -2,10 +2,16 @@
 cmake_minimum_required(VERSION 2.8)
 project(sigrlinn)
 
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
 
 find_package(D3D11 REQUIRED)
 find_package(D3D12)
+
+set(SGFX_USE_D3D11_1 FALSE CACHE BOOL "Use D3D11.1 features")
+
+if(SGFX_USE_D3D11_1)
+    add_definitions("/DSGFX_USE_D3D11_1=1")
+endif()
 
 file(GLOB src          sigrlinn/*.cc)
 file(GLOB hdr          sigrlinn/*.hh)
