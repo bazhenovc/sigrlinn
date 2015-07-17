@@ -1,18 +1,22 @@
 
-#define kBlockSize    256
-#define kMaxParticles 25600
+#define kBlockSize    128
+
+cbuffer ConstantBuffer: register(c0)
+{
+    row_major matrix    mvp;
+    float3              cameraPosition;
+};
 
 struct ParticleData
 {
     float4 position;
     float4 velocity;
-    float4 params;
+    float4 params;      // {life, size, color, 0}
 };
 
-StructuredBuffer<ParticleData>   oldParticleBuffer : register(b0);
-RWStructuredBuffer<ParticleData> newParticleBuffer : register(b1);
-
-groupshared float4 sharedPosition[kBlockSize];
+StructuredBuffer<ParticleData>   oldParticleBuffer      : register(b0);
+RWStructuredBuffer<ParticleData> newParticleBuffer      : register(b1);
+RWStructuredBuffer<ParticleData> groundParticleBuffer   : register(b2);
 
 uint wang_hash(uint seed)
 {
@@ -48,21 +52,39 @@ void cs_main(
     uint  groupIndex    : SV_GroupIndex
 )
 {
-    uint randomSeed = dispatchID.x;
-
-    ParticleData pdata = oldParticleBuffer[dispatchID.x];
     const float3 acceleration = float3(0, -0.1, 0);
 
-    pdata.velocity.xyz += acceleration.xyz * 0.1;
-    pdata.position.xyz += pdata.velocity.xyz * 0.1;
-    pdata.velocity.w = length(pdata.velocity.xyz);
+    [loop]
+    for (uint i = 0; i < kBlockSize; ++i) {
+        uint idx = i * kBlockSize + groupIndex;
 
-    pdata.params.x -= length(pdata.velocity.xyz) * 0.1 + 0.1;
-    [flatten] if (pdata.params.x <= 0.0) {
-        pdata.position.xyz = rand3(randomSeed, float3(-20, 0, 5), float3(50, 50, 50));
-        pdata.velocity.xyz = rand3(randomSeed, float3(-2.0, -2.0, -2.0), float3(5.0, 5.0, 5.0));
-        pdata.params.x     = rand(randomSeed, 20.0, 50.0);
+        uint randomSeed = idx;
+
+        ParticleData pdata = oldParticleBuffer[idx];
+
+        pdata.velocity.xyz += acceleration.xyz * 0.1;
+        pdata.position.xyz += pdata.velocity.xyz * 0.5;
+        pdata.velocity.w = length(pdata.velocity.xyz);
+
+        pdata.params.x -= length(pdata.velocity.xyz) * 0.5 + 0.1;
+        pdata.params.y  = 0.05;
+        pdata.params.z  = 1.0;
+
+        //[branch] if (pdata.params.x <= 0.0) {
+        [branch] if (pdata.position.y <= 0.0) {
+            ParticleData groundParticle = pdata;
+            groundParticle.params.x = 1.0;
+            groundParticle.params.y = 0.2;
+            groundParticle.params.z = 0.0;
+
+            groundParticleBuffer[idx] = groundParticle;
+
+            pdata.position.xyz = cameraPosition + rand3(randomSeed, float3(-20, 20, -20), float3(50, 70, 50));
+            //pdata.velocity.xyz = rand3(randomSeed, float3(-2.0, -2.0, -2.0), float3(5.0, 5.0, 5.0));
+            pdata.velocity.xyz = float3(0.0, 0.0, 0.0);
+            pdata.params.x     = pdata.position.y * 10; //rand(randomSeed, 20.0, 50.0);
+        }
+
+        newParticleBuffer[idx] = pdata;
     }
-
-    newParticleBuffer[dispatchID.x] = pdata;
 }

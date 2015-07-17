@@ -15,12 +15,14 @@ struct VS_OUTPUT
 {
     float4 position : SV_POSITION;
     float4 color    : TEXCOORD0;
+    float4 params   : TEXCOORD1;
 };
 
 struct GS_OUTPUT
 {
     float4 position : SV_Position;
     float4 color    : TEXCOORD0;
+    float4 params   : TEXCOORD1;
 };
 
 cbuffer cbImmutable
@@ -44,8 +46,9 @@ cbuffer cbImmutable
 
 cbuffer ConstantBuffer: register(c0)
 {
-    row_major matrix mvp;
-}
+    row_major matrix    mvp;
+    float3              cameraPosition;
+};
 
 StructuredBuffer<ParticleData> particleDataIn : register(b0);
 
@@ -56,10 +59,11 @@ VS_OUTPUT vs_main(VS_INPUT input)
     ParticleData pdata = particleDataIn[input.vertexID];
     
     output.position = pdata.position;
+    output.params   = pdata.params;
 
     float fade = rcp(pdata.velocity.w);
 
-    output.color = float4(1.0F, 0, 0, 1.0) * fade;
+    output.color = float4(pdata.params.z, 0, 0, 1.0) * fade;
 
     return output;
 }
@@ -70,8 +74,9 @@ void gs_main(point VS_OUTPUT input[1], inout TriangleStream<GS_OUTPUT> stream)
     GS_OUTPUT output;
 
     for (int i = 0; i < 4; ++i) {
-        float3 position = g_positions[i] * 0.1F + input[0].position;
+        float3 position = g_positions[i] * input[0].params.y + input[0].position;
         output.position = mul(float4(position, 1.0F), mvp);
+        output.params   = input[0].params;
         output.color    = input[0].color;
 
         stream.Append(output);

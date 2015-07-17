@@ -5,7 +5,7 @@ project(sigrlinn)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
 
 find_package(D3D11 REQUIRED)
-find_package(D3D12)
+#find_package(D3D12)
 
 set(SGFX_USE_D3D11_1 FALSE CACHE BOOL "Use D3D11.1 features")
 

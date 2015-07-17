@@ -33,7 +33,42 @@ public:
 
     enum
     {
-        kMaxParticles = 25600
+        kMaxParticles   = 128 * 128,
+        kBlockSize      = 128
+    };
+
+    struct ParticleBuffer
+    {
+        sgfx::BufferHandle bufferIn;
+        sgfx::BufferHandle bufferOut;
+
+        inline ~ParticleBuffer()
+        {
+            release();
+        }
+
+        inline void release()
+        {
+            sgfx::releaseBuffer(bufferIn);  bufferIn    = sgfx::BufferHandle::invalidHandle();
+            sgfx::releaseBuffer(bufferOut); bufferOut   = sgfx::BufferHandle::invalidHandle();
+        }
+
+        inline void init()
+        {
+            bufferIn = sgfx::createBuffer(
+                sgfx::BufferFlags::StructuredBuffer | sgfx::BufferFlags::CPUWrite, nullptr,
+                kMaxParticles * sizeof(ParticleData), sizeof(ParticleData)
+            );
+            bufferOut = sgfx::createBuffer(
+                sgfx::BufferFlags::GPUWrite, nullptr,
+                kMaxParticles * sizeof(ParticleData), sizeof(ParticleData)
+            );
+        }
+
+        inline void update()
+        {
+            sgfx::copyResource(bufferOut, bufferIn);
+        }
     };
 
     struct ParticleData
@@ -46,10 +81,11 @@ public:
     struct ConstantBuffer
     {
         float mvp[16];
+        float cameraPosition[4];
     };
 
-    sgfx::BufferHandle          particlesBufferIn;
-    sgfx::BufferHandle          particlesBufferOut;
+    ParticleBuffer              fallingParticles;
+    ParticleBuffer              groundParticles;
 
     sgfx::VertexShaderHandle    vsHandle;
     sgfx::GeometryShaderHandle  gsHandle;
@@ -89,14 +125,8 @@ public:
         csHandle = loadCS("shaders/particles_cs.hlsl");
         csQueue  = sgfx::createComputeQueue(csHandle);
 
-        particlesBufferIn   = sgfx::createBuffer(
-            sgfx::BufferFlags::StructuredBuffer | sgfx::BufferFlags::CPUWrite, nullptr,
-            kMaxParticles * sizeof(ParticleData), sizeof(ParticleData)
-        );
-        particlesBufferOut  = sgfx::createBuffer(
-            sgfx::BufferFlags::GPUWrite, nullptr,
-            kMaxParticles * sizeof(ParticleData), sizeof(ParticleData)
-        );
+        fallingParticles.init();
+        groundParticles.init();
 
         // create render target
         colorBuffer        = sgfx::getBackBuffer();
@@ -183,8 +213,8 @@ public:
     {
         OutputDebugString("Cleanup\n");
 
-        sgfx::releaseBuffer(particlesBufferIn);
-        sgfx::releaseBuffer(particlesBufferOut);
+        fallingParticles.release();
+        groundParticles.release();
 
         sgfx::releaseConstantBuffer(constantBuffer);
         sgfx::releaseVertexShader(vsHandle);
@@ -214,27 +244,42 @@ public:
         if (dwTimeStart == 0)
             dwTimeStart = dwTimeCur;
         t = (dwTimeCur - dwTimeStart) / 1000.0f;
+        dwTimeStart = dwTimeCur;
+
+        static glm::vec3 cameraPosition = glm::vec3(0.0F, 1.0F, -10);
+        cameraPosition.z += t * 2.0F;
 
         glm::mat4 projection = glm::perspective(glm::pi<float>() / 2.0F, width / (FLOAT)height, 0.01f, 100.0f);
-        glm::mat4 view       = glm::lookAt(glm::vec3(0.0F, 1.0F, -5.0F), glm::vec3(0.0F, 1.0F, 0.0F), glm::vec3(0.0F, 1.0F, 0.0F));
+        glm::mat4 view       = glm::lookAt(cameraPosition, cameraPosition + glm::vec3(0.0F, 0.0F, 1.0F), glm::vec3(0.0F, 1.0F, 0.0F));
         //glm::mat4 world      = glm::rotate(glm::mat4(1.0F), t, glm::vec3(0.0F, 1.0F, 0.0F));
 
         glm::mat4 mvp = projection * view;// * world;
 
         ConstantBuffer constants;
-        std::memcpy(constants.mvp, glm::value_ptr(mvp), sizeof(constants.mvp));
+        std::memcpy(constants.mvp,              glm::value_ptr(mvp),            sizeof(constants.mvp));
+        std::memcpy(constants.cameraPosition,   glm::value_ptr(cameraPosition), sizeof(constants.cameraPosition));
         sgfx::updateConstantBuffer(constantBuffer, &constants);
 
         // dispatch compute queue
+        sgfx::beginPerfEvent(L"ParticleSimulate");
         {
-            sgfx::setResource(csQueue, 0, particlesBufferIn);
-            sgfx::setResourceRW(csQueue, 0, particlesBufferOut);
-            sgfx::submit(csQueue, 128, 1, 1);
+            sgfx::setConstantBuffer(csQueue, 0, constantBuffer);
+            sgfx::setResource(csQueue, 0, fallingParticles.bufferIn);
+            sgfx::setResourceRW(csQueue, 0, fallingParticles.bufferOut);
+            sgfx::setResourceRW(csQueue, 1, groundParticles.bufferOut);
+            sgfx::submit(csQueue, kBlockSize, 1, 1);
         }
+        sgfx::endPerfEvent();
 
-        sgfx::copyResource(particlesBufferOut, particlesBufferIn);
+        sgfx::beginPerfEvent(L"ParticleCopy");
+        {
+            fallingParticles.update();
+            groundParticles.update();
+        }
+        sgfx::endPerfEvent();
 
         // actually draw some stuff
+        sgfx::beginPerfEvent(L"ParticleDraw");
         {
             sgfx::clearRenderTarget(renderTarget, 0xFFFFFFF);
             sgfx::clearDepthStencil(renderTarget, 1.0F, 0);
@@ -243,12 +288,18 @@ public:
 
             sgfx::setPrimitiveTopology(drawQueue, sgfx::PrimitiveTopology::PointList);
             sgfx::setConstantBuffer(drawQueue, 0, constantBuffer);
-            sgfx::setResource(drawQueue, 0, particlesBufferIn);
+            sgfx::setResource(drawQueue, 0, fallingParticles.bufferIn);
+            sgfx::draw(drawQueue, kMaxParticles, 0);
+
+            sgfx::setPrimitiveTopology(drawQueue, sgfx::PrimitiveTopology::PointList);
+            sgfx::setConstantBuffer(drawQueue, 0, constantBuffer);
+            sgfx::setResource(drawQueue, 0, groundParticles.bufferIn);
             sgfx::draw(drawQueue, kMaxParticles, 0);
 
             sgfx::submit(drawQueue);
         }
         sgfx::present(1);
+        sgfx::endPerfEvent();
     }
 };
 
