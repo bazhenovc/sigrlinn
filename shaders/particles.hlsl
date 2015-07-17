@@ -21,8 +21,9 @@ struct VS_OUTPUT
 struct GS_OUTPUT
 {
     float4 position : SV_Position;
-    float4 color    : TEXCOORD0;
-    float4 params   : TEXCOORD1;
+    float2 uv       : TEXCOORD0;
+    float4 color    : TEXCOORD1;
+    float4 params   : TEXCOORD2;
 };
 
 cbuffer cbImmutable
@@ -50,7 +51,9 @@ cbuffer ConstantBuffer: register(c0)
     float3              cameraPosition;
 };
 
-StructuredBuffer<ParticleData> particleDataIn : register(b0);
+SamplerState                    samplerDefault  : register(s0);
+StructuredBuffer<ParticleData>  particleDataIn  : register(b0);
+Texture2D                       particleTexture : register(t1);
 
 VS_OUTPUT vs_main(VS_INPUT input)
 {
@@ -76,6 +79,7 @@ void gs_main(point VS_OUTPUT input[1], inout TriangleStream<GS_OUTPUT> stream)
     for (int i = 0; i < 4; ++i) {
         float3 position = g_positions[i] * input[0].params.y + input[0].position;
         output.position = mul(float4(position, 1.0F), mvp);
+        output.uv       = g_texcoords[i];
         output.params   = input[0].params;
         output.color    = input[0].color;
 
@@ -84,7 +88,10 @@ void gs_main(point VS_OUTPUT input[1], inout TriangleStream<GS_OUTPUT> stream)
     stream.RestartStrip();
 }
 
-float4 ps_main(VS_OUTPUT input) : SV_Target
+float4 ps_main(GS_OUTPUT input) : SV_Target
 {
-    return input.color;
+    float4 color = particleTexture.Sample(samplerDefault, input.uv);
+    clip(color.a - 0.2);
+
+    return color;
 }

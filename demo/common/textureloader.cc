@@ -166,6 +166,9 @@ sgfx::Texture2DHandle loadDDS(const std::string& path)
             mipHeight = std::max(mipHeight >> 1, 1U);
 
             offset += mipSize;
+
+            if (mipWidth == 4 || mipHeight == 4)
+                break;
         }
 
         OutputDebugString(("Loaded texture: " + path + "\n").c_str());

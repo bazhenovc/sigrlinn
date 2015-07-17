@@ -21,6 +21,7 @@
 /// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 /// THE SOFTWARE.
 #include "common/app.hh"
+#include "common/textureloader.hh"
 
 #include <memory>
 
@@ -84,6 +85,9 @@ public:
         float cameraPosition[4];
     };
 
+    sgfx::TextureHandle         snowflakeTexture;
+    sgfx::SamplerStateHandle    samplerState;
+
     ParticleBuffer              fallingParticles;
     ParticleBuffer              groundParticles;
 
@@ -120,6 +124,24 @@ public:
     {
         // setup Sigrlinn
         sgfx::initD3D11(g_pd3dDevice, g_pImmediateContext, g_pSwapChain);
+
+        // create sampler state
+        sgfx::SamplerStateDescriptor samplerDesc;
+        samplerDesc.filter          = sgfx::TextureFilter::MinMagMip_Linear;
+        samplerDesc.addressU        = sgfx::AddressMode::Clamp;
+        samplerDesc.addressV        = sgfx::AddressMode::Clamp;
+        samplerDesc.addressW        = sgfx::AddressMode::Clamp;
+        samplerDesc.lodBias         = 0.0F;
+        samplerDesc.maxAnisotropy   = 1;
+        samplerDesc.comparisonFunc  = sgfx::ComparisonFunc::Never;
+        samplerDesc.borderColor     = 0xFFFFFFFF;
+        samplerDesc.minLod          = -3.402823466e+38F;
+        samplerDesc.maxLod          = 3.402823466e+38F;
+
+        samplerState = sgfx::createSamplerState(samplerDesc);
+
+        // load textures
+        snowflakeTexture = loadDDS("data/textures/snowflake.dds");
 
         // create compute stuff
         csHandle = loadCS("shaders/particles_cs.hlsl");
@@ -213,6 +235,9 @@ public:
     {
         OutputDebugString("Cleanup\n");
 
+        sgfx::releaseTexture(snowflakeTexture);
+        sgfx::releaseSamplerState(samplerState);
+
         fallingParticles.release();
         groundParticles.release();
 
@@ -281,7 +306,9 @@ public:
         // actually draw some stuff
         sgfx::beginPerfEvent(L"ParticleDraw");
         {
-            sgfx::clearRenderTarget(renderTarget, 0xFFFFFFF);
+            sgfx::setSamplerState(drawQueue, 0, samplerState);
+
+            sgfx::clearRenderTarget(renderTarget, 0xFF000000);
             sgfx::clearDepthStencil(renderTarget, 1.0F, 0);
             sgfx::setRenderTarget(renderTarget);
             sgfx::setViewport(width, height, 0.0F, 1.0F);
@@ -289,11 +316,13 @@ public:
             sgfx::setPrimitiveTopology(drawQueue, sgfx::PrimitiveTopology::PointList);
             sgfx::setConstantBuffer(drawQueue, 0, constantBuffer);
             sgfx::setResource(drawQueue, 0, fallingParticles.bufferIn);
+            sgfx::setResource(drawQueue, 1, snowflakeTexture);
             sgfx::draw(drawQueue, kMaxParticles, 0);
 
             sgfx::setPrimitiveTopology(drawQueue, sgfx::PrimitiveTopology::PointList);
             sgfx::setConstantBuffer(drawQueue, 0, constantBuffer);
             sgfx::setResource(drawQueue, 0, groundParticles.bufferIn);
+            sgfx::setResource(drawQueue, 1, snowflakeTexture);
             sgfx::draw(drawQueue, kMaxParticles, 0);
 
             sgfx::submit(drawQueue);

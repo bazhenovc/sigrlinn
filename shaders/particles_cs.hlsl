@@ -67,14 +67,14 @@ void cs_main(
         pdata.velocity.w = length(pdata.velocity.xyz);
 
         pdata.params.x -= length(pdata.velocity.xyz) * 0.5 + 0.1;
-        pdata.params.y  = 0.05;
+        pdata.params.y  = 0.3;
         pdata.params.z  = 1.0;
 
         //[branch] if (pdata.params.x <= 0.0) {
         [branch] if (pdata.position.y <= 0.0) {
             ParticleData groundParticle = pdata;
             groundParticle.params.x = 1.0;
-            groundParticle.params.y = 0.2;
+            groundParticle.params.y = 1.6;
             groundParticle.params.z = 0.0;
 
             groundParticleBuffer[idx] = groundParticle;
