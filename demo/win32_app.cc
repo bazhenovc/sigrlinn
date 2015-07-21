@@ -104,7 +104,10 @@ HRESULT Application::initWindow(HINSTANCE hInstance, int nCmdShow)
 
     // Create window
     g_hInst = hInstance;
-    RECT rc = { 0, 0, Application::width, Application::height };
+    RECT rc = {
+        0, 0,
+        static_cast<LONG>(Application::width), static_cast<LONG>(Application::height)
+    };
     AdjustWindowRect(&rc, WS_OVERLAPPEDWINDOW, FALSE);
     g_hWnd = CreateWindowA(
         "SigrlinnWC",

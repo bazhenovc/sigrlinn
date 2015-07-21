@@ -41,7 +41,7 @@ struct ListNode
 {
     uint    packedColor;
     float   depth;
-    uint    next;
+    uint    nextNodeID;
 };
 
 struct NodeData
@@ -50,18 +50,16 @@ struct NodeData
     float   depth;
 };
 
-SamplerState samplerDefault;
-
-RWTexture2D<uint>               headBuffer      : register(u1);
-RWStructuredBuffer<ListNode>    fragmentsList   : register(u2);
+RWTexture2D<uint>               headBuffer  : register(u1);
+RWStructuredBuffer<ListNode>    listBuffer  : register(u2);
 
 float4 unpackColor(uint color)
 {
     float4 output;
-    output.r = float((color >> 24) & 0x000000ff) / 255.0f;
-    output.g = float((color >> 16) & 0x000000ff) / 255.0f;
-    output.b = float((color >> 8) & 0x000000ff) / 255.0f;
-    output.a = float(color & 0x000000ff) / 255.0f;
+    output.r = float((color >> 24)  & 0x000000ff) / 255.0f;
+    output.g = float((color >> 16)  & 0x000000ff) / 255.0f;
+    output.b = float((color >> 8)   & 0x000000ff) / 255.0f;
+    output.a = float((color >> 0)   & 0x000000ff) / 255.0f;
     return saturate(output);
 }
 
@@ -70,20 +68,20 @@ void insertionSort(uint startIndex, inout NodeData sortedFragments[kMaxPixels], 
     counter = 0;
     uint index = startIndex;
 
-    for (int i = 0; i < kMaxPixels; i++) {
+    [unroll] for (int i = 0; i < kMaxPixels; i++) {
         if (index != 0xffffffff) {
-            sortedFragments[counter].packedColor    = fragmentsList[index].packedColor;
-            sortedFragments[counter].depth          = fragmentsList[index].depth;
+            sortedFragments[counter].packedColor = listBuffer[index].packedColor;
+            sortedFragments[counter].depth       = listBuffer[index].depth;
             counter++;
-            index = fragmentsList[index].next;          
+            index = listBuffer[index].nextNodeID;          
         }
     }
     
-    for (int k = 1; k < kMaxPixels; k++)  {
+    [unroll] for (int k = 1; k < kMaxPixels; k++)  {
         int j = k;
         NodeData t = sortedFragments[k];
         
-        while (sortedFragments[j - 1].depth < t.depth)  {
+        [loop] while (sortedFragments[j - 1].depth < t.depth)  {
             sortedFragments[j] = sortedFragments[j - 1];
             j--;
             if (j <= 0)
@@ -99,9 +97,7 @@ float4 ps_main(VS_OUTPUT input) : SV_Target0
 {
     uint2 upos = uint2(input.position.xy);
     uint index = headBuffer[upos];
-    //clip(index == 0xffffffff ? -1 : 1);
-    if (index == 0xffffffff)
-        discard;
+    clip(index == 0xffffffff ? -1 : 1);
 
     float3 color = float3(0, 0, 0);
     float alpha = 1;
@@ -114,10 +110,13 @@ float4 ps_main(VS_OUTPUT input) : SV_Target0
     int counter = 0;
     insertionSort(index, sortedFragments, counter);
 
-    [loop] for (int i = 0; i < counter; i++) {
+    [unroll(kMaxPixels)] for (int i = 0; i < counter; i++) {
         float4 c = unpackColor(sortedFragments[i].packedColor);
-        alpha *= (1.0 - c.a);
-        color = lerp(color, c.rgb, c.a);
+        //alpha *= (1.0 - c.a);
+        //color = lerp(color, c.rgb, c.a);
+        //color = color * c + c;
+        //color = color * 1.0 + c * c;
+        color += c;
     }
 
     return float4(color, alpha);
