@@ -1,4 +1,6 @@
 
+//#define USE_OIT 1
+
 struct ParticleData
 {
     float4 position;
@@ -88,6 +90,53 @@ void gs_main(point VS_OUTPUT input[1], inout TriangleStream<GS_OUTPUT> stream)
     stream.RestartStrip();
 }
 
+#ifdef USE_OIT
+struct ListNode
+{
+    uint packedColor;
+    uint depthAndCoverage;
+    uint nextNodeID;
+};
+
+uint packColor(float4 color)
+{
+    return
+        (uint(color.r * 255) << 24) | 
+        (uint(color.g * 255) << 16) |
+        (uint(color.b * 255) << 8)  |
+        (uint(color.a * 255));
+}
+
+globallycoherent RWTexture2D<uint>              headBuffer : register(u1);
+globallycoherent RWStructuredBuffer<ListNode>   listBuffer : register(u2);
+
+[earlydepthstencil]
+float4 ps_main(GS_OUTPUT input, uint coverage : SV_Coverage) : SV_Target
+{
+    float4 color = particleTexture.Sample(samplerDefault, input.uv);
+
+    uint prevNodeID = 0;
+    uint nextNodeID = listBuffer.IncrementCounter();
+    if (nextNodeID == 0xffffffff)
+        return float4(0, 0, 0, 0);
+
+    uint2 upos = uint2(input.position.xy);
+
+    InterlockedExchange(headBuffer[upos], nextNodeID, prevNodeID);
+
+    uint depth = f32tof16(input.position.w);
+
+    ListNode node;
+    node.packedColor        = packColor(color);
+    node.depthAndCoverage   = depth | (coverage << 16);
+    node.nextNodeID         = prevNodeID;
+
+    listBuffer[nextNodeID]  = node;
+
+    return color;
+}
+
+#else
 float4 ps_main(GS_OUTPUT input) : SV_Target
 {
     float4 color = particleTexture.Sample(samplerDefault, input.uv);
@@ -95,3 +144,4 @@ float4 ps_main(GS_OUTPUT input) : SV_Target
 
     return color;
 }
+#endif

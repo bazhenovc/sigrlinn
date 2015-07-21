@@ -102,7 +102,8 @@ namespace TextureFlags {
 enum : uint32_t {
     RenderTarget = (1U << 0),
     DepthStencil = (1U << 1),
-    CPURead      = (1U << 2)
+    CPURead      = (1U << 2),
+    GPUWrite     = (1U << 3)
 };
 }
 
@@ -592,6 +593,9 @@ RenderTargetHandle createRenderTarget(const RenderTargetDescriptor& desc);
 void               releaseRenderTarget(RenderTargetHandle handle);
 
 void               setViewport(uint32_t width, uint32_t height, float minDepth, float maxDepth);
+
+void               setResourceRW(RenderTargetHandle handle, uint32_t slot, BufferHandle resource);
+void               setResourceRW(RenderTargetHandle handle, uint32_t slot, TextureHandle resource);
 
 void               setRenderTarget(RenderTargetHandle handle);
 void               clearRenderTarget(RenderTargetHandle handle, uint32_t color);

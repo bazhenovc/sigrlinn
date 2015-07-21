@@ -54,8 +54,7 @@ void cs_main(
 {
     const float3 acceleration = float3(0, -0.1, 0);
 
-    [loop]
-    for (uint i = 0; i < kBlockSize; ++i) {
+    [loop] for (uint i = 0; i < kBlockSize; ++i) {
         uint idx = i * kBlockSize + groupIndex;
 
         uint randomSeed = idx;

@@ -56,12 +56,12 @@ struct DrawCall final
 
     enum
     {
-        kMaxConstantBuffers = 8,
-        kMaxShaderResources = 128
+        kMaxConstantBuffers     = 8,
+        kMaxShaderResources     = 128,
     };
 
-    ConstantBufferHandle constantBuffers[kMaxConstantBuffers];
-    ShaderResource       shaderResources[kMaxShaderResources];
+    ConstantBufferHandle    constantBuffers[kMaxConstantBuffers];
+    ShaderResource          shaderResources[kMaxShaderResources];
 
     BufferHandle      vertexBuffer;
     BufferHandle      indexBuffer;

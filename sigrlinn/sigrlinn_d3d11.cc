@@ -374,7 +374,7 @@ struct DXStateCache final
         }
     }
 
-    inline void setShaderResourcesRW(internal::ShaderResource* resources)
+    inline void setShaderResourcesRW(const internal::ShaderResource* resources)
     {
         for (size_t i = 0; i < internal::ComputeQueue::kMaxShaderResourcesRW; ++i) {
             DXSharedBuffer* buffer = static_cast<DXSharedBuffer*>(resources[i].value);
@@ -386,7 +386,8 @@ struct DXStateCache final
             if (state != shaderUAVs[i]) {
                 shaderUAVs[i] = state;
 
-                g_pImmediateContext->CSSetUnorderedAccessViews(i, 1, &state, nullptr);
+                if (type == SC_Compute)
+                    g_pImmediateContext->CSSetUnorderedAccessViews(i, 1, &state, nullptr);
             }
         }
     }
@@ -427,13 +428,15 @@ struct PipelineStateImpl final
 
 struct RenderTargetImpl final
 {
-    UINT                    numRenderTargets = 0;
-    ID3D11RenderTargetView* renderTargetViews[RenderTargetSlot::Count];
-    ID3D11DepthStencilView* depthStencilView = nullptr;
+    UINT                        numRenderTargets = 0;
+    ID3D11RenderTargetView*     renderTargetViews[RenderTargetSlot::Count];
+    ID3D11DepthStencilView*     depthStencilView = nullptr;
+    ID3D11UnorderedAccessView*  unorderedAccessViews[RenderTargetSlot::Count];
 
     inline RenderTargetImpl()
     {
         std::memset(renderTargetViews, 0, sizeof(renderTargetViews));
+        std::memset(unorderedAccessViews, 0, sizeof(unorderedAccessViews));
     }
 
     inline ~RenderTargetImpl()
@@ -1319,6 +1322,7 @@ Texture1DHandle createTexture1D(uint32_t width, DataFormat format, uint32_t numM
     D3D11_USAGE usageFlags  = D3D11_USAGE_DEFAULT;
     UINT        cpuAccess   = 0;
     bool        isStaging   = false;
+    bool        isUAV       = false;
 
     if (flags & TextureFlags::RenderTarget)
         bindFlags |= D3D11_BIND_RENDER_TARGET;
@@ -1330,6 +1334,11 @@ Texture1DHandle createTexture1D(uint32_t width, DataFormat format, uint32_t numM
         usageFlags  = D3D11_USAGE_STAGING;
         cpuAccess   = D3D11_CPU_ACCESS_READ;
         isStaging   = true;
+    }
+
+    if (flags & TextureFlags::GPUWrite) {
+        bindFlags  |= D3D11_BIND_UNORDERED_ACCESS;
+        isUAV       = true;
     }
 
     D3D11_TEXTURE1D_DESC textureDesc;
@@ -1367,9 +1376,28 @@ Texture1DHandle createTexture1D(uint32_t width, DataFormat format, uint32_t numM
         }
     }
 
+    D3D11_UNORDERED_ACCESS_VIEW_DESC uavDesc;
+    std::memset(&uavDesc, 0, sizeof(uavDesc));
+
+    uavDesc.Format                      = MapDataFormat[static_cast<size_t>(format)];
+    uavDesc.ViewDimension               = D3D11_UAV_DIMENSION_TEXTURE1D;
+    uavDesc.Texture1D.MipSlice          = 0; // TODO: handle this!
+
+    ID3D11UnorderedAccessView* d3dUAV = nullptr;
+    if (isUAV) {
+        if (FAILED(g_pd3dDevice->CreateUnorderedAccessView(d3dTexture, &uavDesc, &d3dUAV))) {
+            // TODO: error handling
+            d3dTexture->Release();
+            if (d3dResourceView != nullptr)
+                d3dResourceView->Release();
+            return Texture1DHandle::invalidHandle();
+        }
+    }
+
     DXSharedBuffer* texture = sgfx::sgfx_new<DXSharedBuffer>();
     texture->dataBuffer = d3dTexture;
     texture->dataView   = d3dResourceView;
+    texture->dataUAV    = d3dUAV;
 
     return Texture1DHandle(texture);
 }
@@ -1380,6 +1408,7 @@ Texture2DHandle createTexture2D(uint32_t width, uint32_t height, DataFormat form
     D3D11_USAGE usageFlags  = D3D11_USAGE_DEFAULT;
     UINT        cpuAccess   = 0;
     bool        isStaging   = false;
+    bool        isUAV       = false;
 
     if (flags & TextureFlags::RenderTarget)
         bindFlags |= D3D11_BIND_RENDER_TARGET;
@@ -1391,6 +1420,11 @@ Texture2DHandle createTexture2D(uint32_t width, uint32_t height, DataFormat form
         usageFlags  = D3D11_USAGE_STAGING;
         cpuAccess   = D3D11_CPU_ACCESS_READ;
         isStaging   = true;
+    }
+
+    if (flags & TextureFlags::GPUWrite) {
+        bindFlags  |= D3D11_BIND_UNORDERED_ACCESS;
+        isUAV       = true;
     }
 
     DXGI_FORMAT dataFormat = MapDataFormat[static_cast<size_t>(format)];
@@ -1453,11 +1487,30 @@ Texture2DHandle createTexture2D(uint32_t width, uint32_t height, DataFormat form
         }
     }
 
+    D3D11_UNORDERED_ACCESS_VIEW_DESC uavDesc;
+    std::memset(&uavDesc, 0, sizeof(uavDesc));
+
+    uavDesc.Format                      = MapDataFormat[static_cast<size_t>(format)];
+    uavDesc.ViewDimension               = D3D11_UAV_DIMENSION_TEXTURE2D;
+    uavDesc.Texture2D.MipSlice          = 0; // TODO: handle this!
+
+    ID3D11UnorderedAccessView* d3dUAV = nullptr;
+    if (isUAV) {
+        if (FAILED(g_pd3dDevice->CreateUnorderedAccessView(d3dTexture, &uavDesc, &d3dUAV))) {
+            // TODO: error handling
+            d3dTexture->Release();
+            if (d3dResourceView != nullptr)
+                d3dResourceView->Release();
+            return Texture1DHandle::invalidHandle();
+        }
+    }
+
     DXSharedBuffer* texture = sgfx::sgfx_new<DXSharedBuffer>();
     texture->dataBuffer = d3dTexture;
     texture->dataView   = d3dResourceView;
+    texture->dataUAV    = d3dUAV;
 
-    return Texture1DHandle(texture);
+    return Texture2DHandle(texture);
 }
 
 Texture3DHandle createTexture3D(uint32_t width, uint32_t height, uint32_t depth, DataFormat format, uint32_t numMipmaps, uint32_t flags)
@@ -1466,6 +1519,7 @@ Texture3DHandle createTexture3D(uint32_t width, uint32_t height, uint32_t depth,
     D3D11_USAGE usageFlags  = D3D11_USAGE_DEFAULT;
     UINT        cpuAccess   = 0;
     bool        isStaging   = false;
+    bool        isUAV       = false;
 
     if (flags & TextureFlags::RenderTarget)
         bindFlags |= D3D11_BIND_RENDER_TARGET;
@@ -1477,6 +1531,11 @@ Texture3DHandle createTexture3D(uint32_t width, uint32_t height, uint32_t depth,
         usageFlags  = D3D11_USAGE_STAGING;
         cpuAccess   = D3D11_CPU_ACCESS_READ;
         isStaging   = true;
+    }
+
+    if (flags & TextureFlags::GPUWrite) {
+        bindFlags  |= D3D11_BIND_UNORDERED_ACCESS;
+        isUAV       = true;
     }
 
     D3D11_TEXTURE3D_DESC textureDesc;
@@ -1515,9 +1574,30 @@ Texture3DHandle createTexture3D(uint32_t width, uint32_t height, uint32_t depth,
         }
     }
 
+    D3D11_UNORDERED_ACCESS_VIEW_DESC uavDesc;
+    std::memset(&uavDesc, 0, sizeof(uavDesc));
+
+    uavDesc.Format                      = MapDataFormat[static_cast<size_t>(format)];
+    uavDesc.ViewDimension               = D3D11_UAV_DIMENSION_TEXTURE3D;
+    uavDesc.Texture3D.MipSlice          = 0; // TODO: handle this!
+    uavDesc.Texture3D.FirstWSlice       = 0; // TODO: handle this!
+    uavDesc.Texture3D.WSize             = 0; // TODO: handle this!
+
+    ID3D11UnorderedAccessView* d3dUAV = nullptr;
+    if (isUAV) {
+        if (FAILED(g_pd3dDevice->CreateUnorderedAccessView(d3dTexture, &uavDesc, &d3dUAV))) {
+            // TODO: error handling
+            d3dTexture->Release();
+            if (d3dResourceView != nullptr)
+                d3dResourceView->Release();
+            return Texture1DHandle::invalidHandle();
+        }
+    }
+
     DXSharedBuffer* texture = sgfx::sgfx_new<DXSharedBuffer>();
     texture->dataBuffer = d3dTexture;
     texture->dataView   = d3dResourceView;
+    texture->dataUAV    = d3dUAV;
 
     return Texture3DHandle(texture);
 }
@@ -1703,16 +1783,59 @@ void setViewport(uint32_t width, uint32_t height, float minDepth, float maxDepth
     g_pImmediateContext->RSSetViewports(1, &vp);
 }
 
+void setResourceRW(RenderTargetHandle handle, uint32_t idx, BufferHandle resource)
+{
+    if (handle != RenderTargetHandle::invalidHandle()) {
+        RenderTargetImpl* rtimpl = static_cast<RenderTargetImpl*>(handle.value);
+
+        ID3D11UnorderedAccessView* uav = nullptr;
+        if (resource != BufferHandle::invalidHandle()) {
+            DXSharedBuffer* buffer = static_cast<DXSharedBuffer*>(resource.value);
+
+            uav = buffer->dataUAV;
+        }
+
+        rtimpl->unorderedAccessViews[idx] = uav;
+    }
+}
+
+void setResourceRW(RenderTargetHandle handle, uint32_t idx, TextureHandle resource)
+{
+    if (handle != RenderTargetHandle::invalidHandle()) {
+        RenderTargetImpl* rtimpl = static_cast<RenderTargetImpl*>(handle.value);
+
+        ID3D11UnorderedAccessView* uav = nullptr;
+        if (resource != TextureHandle::invalidHandle()) {
+            DXSharedBuffer* texture = static_cast<DXSharedBuffer*>(resource.value);
+
+            uav = texture->dataUAV;
+        }
+
+        rtimpl->unorderedAccessViews[idx] = uav;
+    }
+}
+
 void setRenderTarget(RenderTargetHandle handle)
 {
     if (handle != RenderTargetHandle::invalidHandle()) {
         RenderTargetImpl* rtimpl = static_cast<RenderTargetImpl*>(handle.value);
 
         // reset previous RTs
-        ID3D11RenderTargetView* rtViews[RenderTargetSlot::Count] = { nullptr };
+        ID3D11RenderTargetView*     rtViews[RenderTargetSlot::Count] = { nullptr };
+        //ID3D11UnorderedAccessView*  uaViews[RenderTargetSlot::Count] = { nullptr };
+
+        //g_pImmediateContext->OMSetRenderTargetsAndUnorderedAccessViews(
+        //    RenderTargetSlot::Count, rtViews,
+        //    nullptr,
+        //    RenderTargetSlot::Count, RenderTargetSlot::Count - 1, uaViews, nullptr
+        //);
         g_pImmediateContext->OMSetRenderTargets(RenderTargetSlot::Count, rtViews, nullptr);
 
-        g_pImmediateContext->OMSetRenderTargets(rtimpl->numRenderTargets, rtimpl->renderTargetViews, rtimpl->depthStencilView);
+        g_pImmediateContext->OMSetRenderTargetsAndUnorderedAccessViews(
+            rtimpl->numRenderTargets, rtimpl->renderTargetViews,
+            rtimpl->depthStencilView,
+            rtimpl->numRenderTargets, RenderTargetSlot::Count - 1, rtimpl->unorderedAccessViews, nullptr
+        );
     }
 }
 

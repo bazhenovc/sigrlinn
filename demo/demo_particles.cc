@@ -35,7 +35,8 @@ public:
     enum
     {
         kMaxParticles   = 128 * 128,
-        kBlockSize      = 128
+        kBlockSize      = 128,
+        kMaxOITPixels   = 8
     };
 
     struct ParticleBuffer
@@ -72,6 +73,13 @@ public:
         }
     };
 
+    struct OITListNode
+    {
+        uint32_t packedColor;
+        uint32_t depthAndCoverage;
+        uint32_t nextNodeID;
+    };
+
     struct ParticleData
     {
         float position[4];
@@ -84,6 +92,9 @@ public:
         float mvp[16];
         float cameraPosition[4];
     };
+
+    sgfx::TextureHandle         oitHeadBuffer;
+    sgfx::BufferHandle          oitListBuffer;
 
     sgfx::TextureHandle         snowflakeTexture;
     sgfx::SamplerStateHandle    samplerState;
@@ -163,6 +174,18 @@ public:
 
         renderTarget = sgfx::createRenderTarget(renderTargetDesc);
 
+        // create OIT textures
+        oitHeadBuffer = sgfx::createTexture2D(
+            width, height, sgfx::DataFormat::R32U, 1, sgfx::TextureFlags::GPUWrite
+        );
+        oitListBuffer = sgfx::createBuffer(
+            sgfx::BufferFlags::GPUWrite, nullptr, width * height * kMaxOITPixels * sizeof(OITListNode), sizeof(OITListNode)
+        );
+
+        // bind OIT textures to the RT
+        sgfx::setResourceRW(renderTarget, 1, oitHeadBuffer);
+        sgfx::setResourceRW(renderTarget, 2, oitListBuffer);
+
         // constant buffer
         constantBuffer = sgfx::createConstantBuffer(nullptr, sizeof(ConstantBuffer));
 
@@ -191,10 +214,10 @@ public:
             desc.rasterizerState.cullMode                           = sgfx::CullMode::Back;
             desc.rasterizerState.counterDirection                   = sgfx::CounterDirection::CW;
 
-            desc.blendState.blendDesc.blendEnabled                  = false;
+            desc.blendState.blendDesc.blendEnabled                  = true;
             desc.blendState.blendDesc.writeMask                     = sgfx::ColorWriteMask::All;
-            desc.blendState.blendDesc.srcBlend                      = sgfx::BlendFactor::One;
-            desc.blendState.blendDesc.dstBlend                      = sgfx::BlendFactor::Zero;
+            desc.blendState.blendDesc.srcBlend                      = sgfx::BlendFactor::SrcAlpha;
+            desc.blendState.blendDesc.dstBlend                      = sgfx::BlendFactor::OneMinusSrcAlpha;
             desc.blendState.blendDesc.blendOp                       = sgfx::BlendOp::Add;
             desc.blendState.blendDesc.srcBlendAlpha                 = sgfx::BlendFactor::One;
             desc.blendState.blendDesc.dstBlendAlpha                 = sgfx::BlendFactor::Zero;
@@ -234,6 +257,9 @@ public:
     virtual void releaseSampleData() override
     {
         OutputDebugString("Cleanup\n");
+
+        sgfx::releaseTexture(oitHeadBuffer);
+        sgfx::releaseBuffer(oitListBuffer);
 
         sgfx::releaseTexture(snowflakeTexture);
         sgfx::releaseSamplerState(samplerState);
@@ -327,6 +353,10 @@ public:
 
             sgfx::submit(drawQueue);
         }
+
+        // resolve OIT
+        {}
+
         sgfx::present(1);
         sgfx::endPerfEvent();
     }
