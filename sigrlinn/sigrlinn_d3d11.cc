@@ -227,10 +227,10 @@ ID3DUserDefinedAnnotation* g_debugAnnotation = nullptr;
 //=============================================================================
 struct DXSharedBuffer final
 {
-    ID3D11Resource*            dataBuffer     = nullptr;
-    ID3D11ShaderResourceView*  dataView       = nullptr;
-    ID3D11UnorderedAccessView* dataUAV        = 0;
-    size_t                     dataBufferSize = 0;
+    ID3D11Resource*            dataBuffer       = nullptr;
+    ID3D11ShaderResourceView*  dataView         = nullptr;
+    ID3D11UnorderedAccessView* dataUAV          = 0;
+    size_t                     dataBufferSize   = 0;
 
     inline DXSharedBuffer() {}
     inline ~DXSharedBuffer()
@@ -254,13 +254,16 @@ struct DXSharedBuffer final
         }
     }
 
-    inline void createUAV(size_t numElements)
+    inline void createUAV(size_t numElements, bool isCounter)
     {
         D3D11_UNORDERED_ACCESS_VIEW_DESC uavDesc;
         std::memset(&uavDesc, 0, sizeof(uavDesc));
         uavDesc.ViewDimension      = D3D11_UAV_DIMENSION_BUFFER;
         uavDesc.Format             = DXGI_FORMAT_UNKNOWN;
         uavDesc.Buffer.NumElements = static_cast<UINT>(numElements);
+
+        if (isCounter)
+            uavDesc.Buffer.Flags = D3D11_BUFFER_UAV_FLAG_COUNTER;
 
         if (FAILED(g_pd3dDevice->CreateUnorderedAccessView(dataBuffer, &uavDesc, &dataUAV))) {
             // TODO: error handling
@@ -284,6 +287,7 @@ struct DXStateCache final
     ID3D11Buffer*               constantBuffers[internal::DrawCall::kMaxConstantBuffers];
     ID3D11ShaderResourceView*   shaderResourceViews[internal::DrawCall::kMaxShaderResources];
     ID3D11UnorderedAccessView*  shaderUAVs[internal::ComputeQueue::kMaxShaderResourcesRW];
+    uint32_t                    shaderUAVCounters[internal::ComputeQueue::kMaxShaderResourcesRW];
 
     bool vs = false;
     bool hs = false;
@@ -304,6 +308,7 @@ struct DXStateCache final
         std::memset(constantBuffers, 0, sizeof(constantBuffers));
         std::memset(shaderResourceViews, 0, sizeof(shaderResourceViews));
         std::memset(shaderUAVs, 0, sizeof(shaderUAVs));
+        std::memset(shaderUAVCounters, 0, sizeof(shaderUAVCounters));
     }
 
     inline void setSamplerStates(const SamplerStateHandle* handles)
@@ -387,7 +392,7 @@ struct DXStateCache final
                 shaderUAVs[i] = state;
 
                 if (type == SC_Compute)
-                    g_pImmediateContext->CSSetUnorderedAccessViews(i, 1, &state, nullptr);
+                    g_pImmediateContext->CSSetUnorderedAccessViews(i, 1, &state, shaderUAVCounters);
             }
         }
     }
@@ -432,18 +437,23 @@ struct RenderTargetImpl final
     ID3D11RenderTargetView*     renderTargetViews[RenderTargetSlot::Count];
     ID3D11DepthStencilView*     depthStencilView = nullptr;
     ID3D11UnorderedAccessView*  unorderedAccessViews[RenderTargetSlot::Count];
+    uint32_t                    uavCounters[RenderTargetSlot::Count];
 
     inline RenderTargetImpl()
     {
         std::memset(renderTargetViews, 0, sizeof(renderTargetViews));
         std::memset(unorderedAccessViews, 0, sizeof(unorderedAccessViews));
+        std::memset(uavCounters, 0, sizeof(uavCounters));
     }
 
     inline ~RenderTargetImpl()
     {
-        for (size_t i = 0; i < RenderTargetSlot::Count; ++i)
+        for (size_t i = 0; i < RenderTargetSlot::Count; ++i) {
             if (renderTargetViews[i] != nullptr)
                 renderTargetViews[i]->Release();
+            //if (unorderedAccessViews[i] != nullptr)
+            //    unorderedAccessViews[i]->Release();
+        }
         if (depthStencilView != nullptr)
             depthStencilView->Release();
     }
@@ -922,7 +932,8 @@ void submit(ComputeQueueHandle handle, uint32_t x, uint32_t y, uint32_t z)
         }
 
         // TODO: add statecache here!
-        g_pImmediateContext->CSSetUnorderedAccessViews(0, internal::ComputeQueue::kMaxShaderResourcesRW, shaderUAVs, nullptr);
+        uint32_t shaderUAVCounters[internal::ComputeQueue::kMaxShaderResourcesRW] = { 0 };
+        g_pImmediateContext->CSSetUnorderedAccessViews(0, internal::ComputeQueue::kMaxShaderResourcesRW, shaderUAVs, shaderUAVCounters);
 
         // dispatch
         g_pImmediateContext->CSSetShader(shader, nullptr, 0);
@@ -1123,6 +1134,7 @@ BufferHandle createBuffer(uint32_t flags, const void* mem, size_t size, size_t s
 
     bool isStructured = false;
     bool isUAV        = false;
+    bool isCounter    = false;
 
     if (flags & BufferFlags::VertexBuffer) {
         bufferBindFlag = D3D11_BIND_VERTEX_BUFFER;
@@ -1142,6 +1154,9 @@ BufferHandle createBuffer(uint32_t flags, const void* mem, size_t size, size_t s
         bufferBindFlag |= D3D11_BIND_UNORDERED_ACCESS;
         bufferMiscFlag |= D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
         isUAV           = true;
+
+        if (flags & BufferFlags::GPUCounter)
+            isCounter = true;
     }
     if (flags & BufferFlags::CPURead) {
         bufferUsage     = D3D11_USAGE_STAGING;
@@ -1176,7 +1191,7 @@ BufferHandle createBuffer(uint32_t flags, const void* mem, size_t size, size_t s
     buffer->dataBuffer = d3dbuffer;
 
     if (isStructured) buffer->createView(size / stride);
-    if (isUAV)        buffer->createUAV(size / stride);
+    if (isUAV)        buffer->createUAV(size / stride, isCounter);
 
     return BufferHandle(buffer);
 }
@@ -1235,6 +1250,30 @@ void copyBufferData(BufferHandle handle, size_t offset, size_t size, const void*
             mem,
             0, 0
         );
+    }
+}
+
+void clearBufferRW(BufferHandle handle, uint32_t value)
+{
+    if (handle != BufferHandle::invalidHandle()) {
+        DXSharedBuffer* buffer = static_cast<DXSharedBuffer*>(handle.value);
+
+        uint32_t d3dValues[4] = { value, 0, 0, 0 };
+
+        if (buffer->dataUAV != nullptr)
+            g_pImmediateContext->ClearUnorderedAccessViewUint(buffer->dataUAV, d3dValues);
+    }
+}
+
+void clearBufferRW(BufferHandle handle, float value)
+{
+    if (handle != BufferHandle::invalidHandle()) {
+        DXSharedBuffer* buffer = static_cast<DXSharedBuffer*>(handle.value);
+
+        float d3dValues[4] = { value, 0.F, 0.0F, 0.0F };
+
+        if (buffer->dataUAV != nullptr)
+            g_pImmediateContext->ClearUnorderedAccessViewFloat(buffer->dataUAV, d3dValues);
     }
 }
 
@@ -1602,6 +1641,30 @@ Texture3DHandle createTexture3D(uint32_t width, uint32_t height, uint32_t depth,
     return Texture3DHandle(texture);
 }
 
+void clearTextureRW(TextureHandle handle, uint32_t value)
+{
+    if (handle != TextureHandle::invalidHandle()) {
+        DXSharedBuffer* buffer = static_cast<DXSharedBuffer*>(handle.value);
+
+        uint32_t d3dValues[4] = { value, 0, 0, 0 };
+
+        if (buffer->dataUAV != nullptr)
+            g_pImmediateContext->ClearUnorderedAccessViewUint(buffer->dataUAV, d3dValues);
+    }
+}
+
+void clearTextureRW(TextureHandle handle, float value)
+{
+    if (handle != TextureHandle::invalidHandle()) {
+        DXSharedBuffer* buffer = static_cast<DXSharedBuffer*>(handle.value);
+
+        float d3dValues[4] = { value, 0.F, 0.0F, 0.0F };
+
+        if (buffer->dataUAV != nullptr)
+            g_pImmediateContext->ClearUnorderedAccessViewFloat(buffer->dataUAV, d3dValues);
+    }
+}
+
 void* mapTexture(TextureHandle handle, MapType type)
 {
     if (handle != TextureHandle::invalidHandle()) {
@@ -1834,7 +1897,8 @@ void setRenderTarget(RenderTargetHandle handle)
         g_pImmediateContext->OMSetRenderTargetsAndUnorderedAccessViews(
             rtimpl->numRenderTargets, rtimpl->renderTargetViews,
             rtimpl->depthStencilView,
-            rtimpl->numRenderTargets, RenderTargetSlot::Count - 1, rtimpl->unorderedAccessViews, nullptr
+            rtimpl->numRenderTargets, RenderTargetSlot::Count - 1, rtimpl->unorderedAccessViews,
+            rtimpl->uavCounters
         );
     }
 }

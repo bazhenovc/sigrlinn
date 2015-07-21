@@ -86,7 +86,8 @@ enum : uint32_t {
     CPURead          = (1U << 3), // can be mapped to be read by the CPU
     CPUWrite         = (1U << 4), // can be mapped to be written by the CPU
     GPUWrite         = (1U << 5), // can be written by the GPU
-    StreamOutput     = (1U << 6), // can be used as a stream output buffer
+    GPUCounter       = (1U << 6), // can be written by the GPU with atomic counter usage
+    StreamOutput     = (1U << 7), // can be used as a stream output buffer
 };
 }
 
@@ -103,7 +104,8 @@ enum : uint32_t {
     RenderTarget = (1U << 0),
     DepthStencil = (1U << 1),
     CPURead      = (1U << 2),
-    GPUWrite     = (1U << 3)
+    GPUWrite     = (1U << 3),
+    GPUCounter   = (1U << 4)
 };
 }
 
@@ -556,6 +558,9 @@ void*                 mapBuffer(BufferHandle handle, MapType type);
 void                  unmapBuffer(BufferHandle handle);
 void                  copyBufferData(BufferHandle handle, size_t offset, size_t size, const void* mem);
 
+void                  clearBufferRW(BufferHandle handle, uint32_t value);
+void                  clearBufferRW(BufferHandle handle, float    value);
+
 ConstantBufferHandle  createConstantBuffer(const void* mem, size_t size);
 void                  updateConstantBuffer(ConstantBufferHandle handle, const void* mem);
 void                  releaseConstantBuffer(ConstantBufferHandle handle);
@@ -567,6 +572,9 @@ void               releaseSamplerState(SamplerStateHandle handle);
 Texture1DHandle createTexture1D(uint32_t width, DataFormat format, uint32_t numMipmaps, uint32_t flags);
 Texture2DHandle createTexture2D(uint32_t width, uint32_t height, DataFormat format, uint32_t numMipmaps, uint32_t flags);
 Texture3DHandle createTexture3D(uint32_t width, uint32_t height, uint32_t depth, DataFormat format, uint32_t numMipmaps, uint32_t flags);
+
+void            clearTextureRW(TextureHandle handle, uint32_t value);
+void            clearTextureRW(TextureHandle handle, float    value);
 
 void*           mapTexture(TextureHandle handle, MapType type);
 void            unmapTexture(TextureHandle handle);

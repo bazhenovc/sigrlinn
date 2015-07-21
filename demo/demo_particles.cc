@@ -73,12 +73,14 @@ public:
         }
     };
 
+#ifdef USE_OIT
     struct OITListNode
     {
-        uint32_t packedColor;
-        uint32_t depthAndCoverage;
-        uint32_t nextNodeID;
+        uint32_t    packedColor;
+        float       depth;
+        uint32_t    nextNodeID;
     };
+#endif
 
     struct ParticleData
     {
@@ -93,8 +95,16 @@ public:
         float cameraPosition[4];
     };
 
+#ifdef USE_OIT
     sgfx::TextureHandle         oitHeadBuffer;
     sgfx::BufferHandle          oitListBuffer;
+
+    sgfx::PipelineStateHandle   oitPipelineState;
+    sgfx::DrawQueueHandle       oitDrawQueue;
+    sgfx::VertexShaderHandle    oitVS;
+    sgfx::PixelShaderHandle     oitPS;
+    sgfx::SurfaceShaderHandle   oitSS;
+#endif
 
     sgfx::TextureHandle         snowflakeTexture;
     sgfx::SamplerStateHandle    samplerState;
@@ -174,23 +184,85 @@ public:
 
         renderTarget = sgfx::createRenderTarget(renderTargetDesc);
 
+#ifdef USE_OIT
         // create OIT textures
         oitHeadBuffer = sgfx::createTexture2D(
             width, height, sgfx::DataFormat::R32U, 1, sgfx::TextureFlags::GPUWrite
         );
         oitListBuffer = sgfx::createBuffer(
-            sgfx::BufferFlags::GPUWrite, nullptr, width * height * kMaxOITPixels * sizeof(OITListNode), sizeof(OITListNode)
+            sgfx::BufferFlags::GPUWrite | sgfx::BufferFlags::GPUCounter, nullptr, width * height * kMaxOITPixels * sizeof(OITListNode), sizeof(OITListNode)
         );
 
         // bind OIT textures to the RT
-        sgfx::setResourceRW(renderTarget, 1, oitHeadBuffer);
-        sgfx::setResourceRW(renderTarget, 2, oitListBuffer);
+        sgfx::setResourceRW(renderTarget, 0, oitHeadBuffer);
+        sgfx::setResourceRW(renderTarget, 1, oitListBuffer);
+
+        // create OIT pipeline
+        oitVS = loadVS("shaders/oit_resolve.hlsl");
+        oitPS = loadPS("shaders/oit_resolve.hlsl");
+
+        if (oitVS != sgfx::VertexShaderHandle::invalidHandle() &&
+            oitPS != sgfx::PixelShaderHandle::invalidHandle()) {
+            oitSS = sgfx::linkSurfaceShader(
+                oitVS,
+                sgfx::HullShaderHandle::invalidHandle(),
+                sgfx::DomainShaderHandle::invalidHandle(),
+                sgfx::GeometryShaderHandle::invalidHandle(),
+                oitPS
+            );
+        }
+
+        if (oitSS != sgfx::SurfaceShaderHandle::invalidHandle()) {
+            sgfx::PipelineStateDescriptor desc;
+
+            desc.rasterizerState.fillMode                           = sgfx::FillMode::Solid;
+            desc.rasterizerState.cullMode                           = sgfx::CullMode::Back;
+            desc.rasterizerState.counterDirection                   = sgfx::CounterDirection::CW;
+
+            desc.blendState.blendDesc.blendEnabled                  = false;
+            desc.blendState.blendDesc.writeMask                     = sgfx::ColorWriteMask::All;
+            desc.blendState.blendDesc.srcBlend                      = sgfx::BlendFactor::One;
+            desc.blendState.blendDesc.dstBlend                      = sgfx::BlendFactor::Zero;
+            desc.blendState.blendDesc.blendOp                       = sgfx::BlendOp::Add;
+            desc.blendState.blendDesc.srcBlendAlpha                 = sgfx::BlendFactor::One;
+            desc.blendState.blendDesc.dstBlendAlpha                 = sgfx::BlendFactor::Zero;
+            desc.blendState.blendDesc.blendOpAlpha                  = sgfx::BlendOp::Add;
+
+            desc.depthStencilState.depthEnabled                     = false;
+            desc.depthStencilState.writeMask                        = sgfx::DepthWriteMask::All;
+            desc.depthStencilState.depthFunc                        = sgfx::DepthFunc::Less;
+
+            desc.depthStencilState.stencilEnabled                   = false;
+            desc.depthStencilState.stencilRef                       = 0;
+            desc.depthStencilState.stencilReadMask                  = 0;
+            desc.depthStencilState.stencilWriteMask                 = 0;
+
+            desc.depthStencilState.frontFaceStencilDesc.stencilFunc = sgfx::StencilFunc::Always;
+            desc.depthStencilState.frontFaceStencilDesc.failOp      = sgfx::StencilOp::Keep;
+            desc.depthStencilState.frontFaceStencilDesc.depthFailOp = sgfx::StencilOp::Keep;
+            desc.depthStencilState.frontFaceStencilDesc.passOp      = sgfx::StencilOp::Keep;
+
+            desc.depthStencilState.backFaceStencilDesc.stencilFunc  = sgfx::StencilFunc::Always;
+            desc.depthStencilState.backFaceStencilDesc.failOp       = sgfx::StencilOp::Keep;
+            desc.depthStencilState.backFaceStencilDesc.depthFailOp  = sgfx::StencilOp::Keep;
+            desc.depthStencilState.backFaceStencilDesc.passOp       = sgfx::StencilOp::Keep;
+
+            desc.shader       = oitSS;
+            desc.vertexFormat = sgfx::VertexFormatHandle::invalidHandle();
+
+            oitPipelineState = sgfx::createPipelineState(desc);
+            if (oitPipelineState != sgfx::PipelineStateHandle::invalidHandle()) {
+                oitDrawQueue = sgfx::createDrawQueue(oitPipelineState);
+            } else {
+                OutputDebugString("Failed to create OIT pipeline state!");
+            }
+        }
+#endif
 
         // constant buffer
         constantBuffer = sgfx::createConstantBuffer(nullptr, sizeof(ConstantBuffer));
 
         // mesh data
-
         vsHandle = loadVS("shaders/particles.hlsl");
         gsHandle = loadGS("shaders/particles.hlsl");
         psHandle = loadPS("shaders/particles.hlsl");
@@ -214,7 +286,7 @@ public:
             desc.rasterizerState.cullMode                           = sgfx::CullMode::Back;
             desc.rasterizerState.counterDirection                   = sgfx::CounterDirection::CW;
 
-            desc.blendState.blendDesc.blendEnabled                  = true;
+            desc.blendState.blendDesc.blendEnabled                  = false;//true;
             desc.blendState.blendDesc.writeMask                     = sgfx::ColorWriteMask::All;
             desc.blendState.blendDesc.srcBlend                      = sgfx::BlendFactor::SrcAlpha;
             desc.blendState.blendDesc.dstBlend                      = sgfx::BlendFactor::OneMinusSrcAlpha;
@@ -258,8 +330,16 @@ public:
     {
         OutputDebugString("Cleanup\n");
 
+#ifdef USE_OIT
         sgfx::releaseTexture(oitHeadBuffer);
         sgfx::releaseBuffer(oitListBuffer);
+
+        sgfx::releasePipelineState(oitPipelineState);
+        sgfx::releaseDrawQueue(oitDrawQueue);
+        sgfx::releaseVertexShader(oitVS);
+        sgfx::releasePixelShader(oitPS);
+        sgfx::releaseSurfaceShader(oitSS);
+#endif
 
         sgfx::releaseTexture(snowflakeTexture);
         sgfx::releaseSamplerState(samplerState);
@@ -311,6 +391,17 @@ public:
         std::memcpy(constants.cameraPosition,   glm::value_ptr(cameraPosition), sizeof(constants.cameraPosition));
         sgfx::updateConstantBuffer(constantBuffer, &constants);
 
+#ifdef USE_OIT
+        // clear from the previous frame and set RT
+        sgfx::clearTextureRW(oitHeadBuffer, 0xffffffff);
+        sgfx::clearBufferRW(oitListBuffer, 0xffffffff);
+#endif
+
+        sgfx::clearRenderTarget(renderTarget, 0xFF000000);
+        sgfx::clearDepthStencil(renderTarget, 1.0F, 0);
+        sgfx::setRenderTarget(renderTarget);
+        sgfx::setViewport(width, height, 0.0F, 1.0F);
+
         // dispatch compute queue
         sgfx::beginPerfEvent(L"ParticleSimulate");
         {
@@ -334,11 +425,6 @@ public:
         {
             sgfx::setSamplerState(drawQueue, 0, samplerState);
 
-            sgfx::clearRenderTarget(renderTarget, 0xFF000000);
-            sgfx::clearDepthStencil(renderTarget, 1.0F, 0);
-            sgfx::setRenderTarget(renderTarget);
-            sgfx::setViewport(width, height, 0.0F, 1.0F);
-
             sgfx::setPrimitiveTopology(drawQueue, sgfx::PrimitiveTopology::PointList);
             sgfx::setConstantBuffer(drawQueue, 0, constantBuffer);
             sgfx::setResource(drawQueue, 0, fallingParticles.bufferIn);
@@ -354,8 +440,19 @@ public:
             sgfx::submit(drawQueue);
         }
 
+#ifdef USE_OIT
         // resolve OIT
-        {}
+        sgfx::beginPerfEvent(L"ParticleResolve");
+        {
+            sgfx::clearRenderTarget(renderTarget, 0xFF000000);
+
+            sgfx::setPrimitiveTopology(oitDrawQueue, sgfx::PrimitiveTopology::TriangleList);
+            sgfx::draw(oitDrawQueue, 3, 0);
+
+            sgfx::submit(oitDrawQueue);
+        }
+        sgfx::endPerfEvent();
+#endif
 
         sgfx::present(1);
         sgfx::endPerfEvent();

@@ -1,7 +1,8 @@
 
 #define kBlockSize    128
+#define kMaxParticles (128 * 128)
 
-cbuffer ConstantBuffer: register(c0)
+cbuffer ConstantBuffer: register(b0)
 {
     row_major matrix    mvp;
     float3              cameraPosition;
@@ -14,9 +15,9 @@ struct ParticleData
     float4 params;      // {life, size, color, 0}
 };
 
-StructuredBuffer<ParticleData>   oldParticleBuffer      : register(b0);
-RWStructuredBuffer<ParticleData> newParticleBuffer      : register(b1);
-RWStructuredBuffer<ParticleData> groundParticleBuffer   : register(b2);
+StructuredBuffer<ParticleData>   oldParticleBuffer      : register(t0);
+RWStructuredBuffer<ParticleData> newParticleBuffer      : register(u0);
+RWStructuredBuffer<ParticleData> groundParticleBuffer   : register(u1);
 
 uint wang_hash(uint seed)
 {
@@ -85,5 +86,25 @@ void cs_main(
         }
 
         newParticleBuffer[idx] = pdata;
+
+#if 0
+        // sort particles
+        [loop] for (uint i = 0; i < kBlockSize; ++i) {
+            uint k = i * kBlockSize + groupIndex;
+
+            int j = k;
+            ParticleData t = groundParticleBuffer[k];
+
+            [loop] while (groundParticleBuffer[j - 1].position.z < t.position.z)  {
+                groundParticleBuffer[j] = groundParticleBuffer[j - 1];
+                j--;
+                if (j <= 0)
+                    break;
+            }
+
+            if (j != k)
+                groundParticleBuffer[j] = t;
+        }
+#endif
     }
 }

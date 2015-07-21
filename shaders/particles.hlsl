@@ -47,14 +47,14 @@ cbuffer cbImmutable
     };
 };
 
-cbuffer ConstantBuffer: register(c0)
+cbuffer ConstantBuffer: register(b0)
 {
     row_major matrix    mvp;
     float3              cameraPosition;
 };
 
 SamplerState                    samplerDefault  : register(s0);
-StructuredBuffer<ParticleData>  particleDataIn  : register(b0);
+StructuredBuffer<ParticleData>  particleDataIn  : register(t0);
 Texture2D                       particleTexture : register(t1);
 
 VS_OUTPUT vs_main(VS_INPUT input)
@@ -93,9 +93,9 @@ void gs_main(point VS_OUTPUT input[1], inout TriangleStream<GS_OUTPUT> stream)
 #ifdef USE_OIT
 struct ListNode
 {
-    uint packedColor;
-    uint depthAndCoverage;
-    uint nextNodeID;
+    uint    packedColor;
+    float   depth;
+    uint    nextNodeID;
 };
 
 uint packColor(float4 color)
@@ -111,25 +111,24 @@ globallycoherent RWTexture2D<uint>              headBuffer : register(u1);
 globallycoherent RWStructuredBuffer<ListNode>   listBuffer : register(u2);
 
 [earlydepthstencil]
-float4 ps_main(GS_OUTPUT input, uint coverage : SV_Coverage) : SV_Target
+float4 ps_main(GS_OUTPUT input) : SV_Target
 {
     float4 color = particleTexture.Sample(samplerDefault, input.uv);
+    clip(color.a - 0.1);
+
+    uint2 upos = uint2(input.position.xy);
 
     uint prevNodeID = 0;
     uint nextNodeID = listBuffer.IncrementCounter();
     if (nextNodeID == 0xffffffff)
         return float4(0, 0, 0, 0);
 
-    uint2 upos = uint2(input.position.xy);
-
     InterlockedExchange(headBuffer[upos], nextNodeID, prevNodeID);
 
-    uint depth = f32tof16(input.position.w);
-
     ListNode node;
-    node.packedColor        = packColor(color);
-    node.depthAndCoverage   = depth | (coverage << 16);
-    node.nextNodeID         = prevNodeID;
+    node.packedColor    = packColor(color);
+    node.depth          = input.position.w;
+    node.nextNodeID     = prevNodeID;
 
     listBuffer[nextNodeID]  = node;
 
