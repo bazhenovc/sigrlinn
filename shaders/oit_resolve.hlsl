@@ -68,7 +68,7 @@ void insertionSort(uint startIndex, inout NodeData sortedFragments[kMaxPixels], 
     counter = 0;
     uint index = startIndex;
 
-    [unroll] for (int i = 0; i < kMaxPixels; i++) {
+    for (int i = 0; i < kMaxPixels; i++) {
         if (index != 0xffffffff) {
             sortedFragments[counter].packedColor = listBuffer[index].packedColor;
             sortedFragments[counter].depth       = listBuffer[index].depth;
@@ -77,11 +77,11 @@ void insertionSort(uint startIndex, inout NodeData sortedFragments[kMaxPixels], 
         }
     }
     
-    [unroll] for (int k = 1; k < kMaxPixels; k++)  {
+    for (int k = 1; k < kMaxPixels; k++)  {
         int j = k;
         NodeData t = sortedFragments[k];
         
-        [loop] while (sortedFragments[j - 1].depth < t.depth)  {
+        while (sortedFragments[j - 1].depth < t.depth)  {
             sortedFragments[j] = sortedFragments[j - 1];
             j--;
             if (j <= 0)
@@ -116,7 +116,7 @@ float4 ps_main(VS_OUTPUT input) : SV_Target0
         //color = lerp(color, c.rgb, c.a);
         //color = color * c + c;
         //color = color * 1.0 + c * c;
-        color += c;
+        color = color + (1.0 - c.a) * (c - color);
     }
 
     return float4(color, alpha);

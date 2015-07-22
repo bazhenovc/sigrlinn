@@ -21,6 +21,7 @@
 /// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 /// THE SOFTWARE.
 #include "common/app.hh"
+#include "common/meshloader.hh"
 
 #include <memory>
 
@@ -32,20 +33,6 @@
 class OITApplication : public Application
 {
 public:
-
-    struct CommonVertex
-    {
-        enum { MaxBones = 4 };
-        float position[3];
-        float texcoord0[2];
-        float texcoord1[2];
-        float normal[3];
-
-        // not used
-        uint8_t boneIDs[MaxBones];
-        float   boneWeights[MaxBones];
-        uint8_t color[4];
-    };
 
     struct ConstantBuffer
     {
@@ -81,8 +68,10 @@ public:
     sgfx::PixelShaderHandle   psHandle;
     sgfx::SurfaceShaderHandle ssHandle;
 
-    sgfx::BufferHandle         cubeVertexBuffer;
-    sgfx::BufferHandle         cubeIndexBuffer;
+    MeshData                   meshData;
+
+    sgfx::BufferHandle         modelVertexBuffer;
+    sgfx::BufferHandle         modelIndexBuffer;
     sgfx::ConstantBufferHandle constantBuffer;
     sgfx::VertexFormatHandle   vertexFormat;
 
@@ -220,164 +209,31 @@ public:
         };
         size_t vfSize = sizeof(vfElements) / sizeof(sgfx::VertexElementDescriptor);
 
-        vertexFormat = loadVF(vfElements, vfSize, "shaders/sample0.hlsl");
+        vertexFormat = loadVF(vfElements, vfSize, "shaders/oit_cube.hlsl");
 
-        CommonVertex cubeVertices[] = {
-            {
-                { 1.000000, 1.000000, -1.000000 }, // Vertex
-                { 0.000000, 0.000000 }, // Texcoord 0
-                { 0, 0 }, // Texcoord 1
-                { 0.000000, 1.000000, 0.000000 }  // Normal
-            },
-            {
-                {-1.000000, 1.000000, -1.000000 }, // Vertex
-                { 0.000000, 1.000000 }, // Texcoord 0
-                { 0, 0 }, // Texcoord 1
-                { 0.000000, 1.000000, 0.000000 }  // Normal
-            },
-            {
-                { -1.000000, 1.000000, 1.000000 }, // Vertex
-                { 1.000000, 1.000000 }, // Texcoord 0
-                { 0, 0 }, // Texcoord 1
-                { 0.000000, 1.000000, 0.000000 }  // Normal
-            },
-            {
-                { 1.000000, 1.000000, 1.000000 }, // Vertex
-                { 1.000000, 0.000000 }, // Texcoord 0
-                { 0, 0 }, // Texcoord 1
-                { 0.000000, 1.000000, 0.000000 }  // Normal
-            },
-            {
-                { 1.000000, -1.000000, 1.000000 }, // Vertex
-                { 0.000000, 0.000000 }, // Texcoord 0
-                { 0, 0 }, // Texcoord 1
-                { 0.000000, -1.000000, 0.000000 }  // Normal
-            },
-            {
-                { -1.000000, -1.000000, 1.000000 }, // Vertex
-                { 0.000000, 1.000000 }, // Texcoord 0
-                { 0, 0 }, // Texcoord 1
-                { 0.000000, -1.000000, 0.000000 }  // Normal
-            },
-            {
-                { -1.000000, -1.000000, -1.000000 }, // Vertex
-                { 1.000000, 1.000000 }, // Texcoord 0
-                { 0, 0 }, // Texcoord 1
-                { 0.000000, -1.000000, 0.000000 }  // Normal
-            },
-            {
-                { 1.000000, -1.000000, -1.000000 }, // Vertex
-                { 1.000000, 0.000000 }, // Texcoord 0
-                { 0, 0 }, // Texcoord 1
-                { 0.000000, -1.000000, 0.000000 }  // Normal
-            },
-            {
-                { 1.000000, 1.000000, 1.000000 }, // Vertex
-                { 0.000000, 0.000000 }, // Texcoord 0
-                { 0, 0 }, // Texcoord 1
-                { 0.000000, 0.000000, 1.000000 }  // Normal
-            },
-            {
-                { -1.000000, 1.000000, 1.000000 }, // Vertex
-                { 0.000000, 1.000000 }, // Texcoord 0
-                { 0, 0 }, // Texcoord 1
-                { 0.000000, 0.000000, 1.000000 }  // Normal
-            },
-            {
-                { -1.000000, -1.000000, 1.000000 }, // Vertex
-                { 1.000000, 1.000000 }, // Texcoord 0
-                { 0, 0 }, // Texcoord 1
-                { 0.000000, 0.000000, 1.000000 }  // Normal
-            },
-            {
-                { 1.000000, -1.000000, 1.000000 }, // Vertex
-                { 1.000000, 0.000000 }, // Texcoord 0
-                { 0, 0 }, // Texcoord 1
-                { 0.000000, 0.000000, 1.000000 }  // Normal
-            },
-            {
-                { 1.000000, -1.000000, -1.000000 }, // Vertex
-                { 0.000000, 0.000000 }, // Texcoord 0
-                { 0, 0 }, // Texcoord 1
-                { 0.000000, 0.000000, -1.000000 }  // Normal
-            },
-            {
-                { -1.000000, -1.000000, -1.000000 }, // Vertex
-                { 0.000000, 1.000000 }, // Texcoord 0
-                { 0, 0 }, // Texcoord 1
-                { 0.000000, 0.000000, -1.000000 }  // Normal
-            },
-            {
-                { -1.000000, 1.000000, -1.000000 }, // Vertex
-                { 1.000000, 1.000000 }, // Texcoord 0
-                { 0, 0 }, // Texcoord 1
-                { 0.000000, 0.000000, -1.000000 }  // Normal
-            },
-            {
-                { 1.000000, 1.000000, -1.000000 }, // Vertex
-                { 1.000000, 0.000000 }, // Texcoord 0
-                { 0, 0 }, // Texcoord 1
-                { 0.000000, 0.000000, -1.000000 }  // Normal
-            },
-            {
-                { -1.000000, 1.000000, 1.000000 }, // Vertex
-                { 0.000000, 0.000000 }, // Texcoord 0
-                { 0, 0 }, // Texcoord 1
-                { -1.000000, 0.000000, 0.000000 }  // Normal
-            },
-            {
-                { -1.000000, 1.000000, -1.000000 }, // Vertex
-                { 0.000000, 1.000000 }, // Texcoord 0
-                { 0, 0 }, // Texcoord 1
-                { -1.000000, 0.000000, 0.000000 }  // Normal
-            },
-            {
-                { -1.000000, -1.000000, -1.000000 }, // Vertex
-                { 1.000000, 1.000000 }, // Texcoord 0
-                { 0, 0 }, // Texcoord 1
-                { -1.000000, 0.000000, 0.000000 }  // Normal
-            },
-            {
-                { -1.000000, -1.000000, 1.000000 }, // Vertex
-                { 1.000000, 0.000000 }, // Texcoord 0
-                { 0, 0 }, // Texcoord 1
-                { -1.000000, 0.000000, 0.000000 }  // Normal
-            },
-            {
-                { 1.000000, 1.000000, -1.000000 }, // Vertex
-                { 0.000000, 0.000000 }, // Texcoord 0
-                { 0, 0 }, // Texcoord 1
-                { 1.000000, 0.000000, 0.000000 }  // Normal
-            },
-            {
-                { 1.000000, 1.000000, 1.000000 }, // Vertex
-                { 0.000000, 1.000000 }, // Texcoord 0
-                { 0, 0 }, // Texcoord 1
-                { 1.000000, 0.000000, 0.000000 }  // Normal
-            },
-            {
-                { 1.000000, -1.000000, 1.000000 }, // Vertex
-                { 1.000000, 1.000000 }, // Texcoord 0
-                { 0, 0 }, // Texcoord 1
-                { 1.000000, 0.000000, 0.000000 }  // Normal
-            },
-            {
-                { 1.000000, -1.000000, -1.000000 }, // Vertex
-                { 1.000000, 0.000000 }, // Texcoord 0
-                { 0, 0 }, // Texcoord 1
-                { 1.000000, 0.000000, 0.000000 }  // Normal
-            }
-        };
-        size_t verticesSize = sizeof(cubeVertices) / sizeof(CommonVertex);
+        meshData.read("data/meshes/dragon/dragon1.mesh");
 
-        static uint32_t cubeIndices[] = { 0, 1, 2, 2, 3, 0, 4, 5, 6, 6, 7, 4, 8, 9, 10, 10, 11, 8, 12, 13, 14, 14, 15, 12, 16, 17, 18, 18, 19, 16, 20, 21, 22, 22, 23, 20 };
-        size_t indicesSize = sizeof(cubeIndices) / sizeof(uint32_t);
+        modelVertexBuffer = sgfx::createBuffer(
+            sgfx::BufferFlags::VertexBuffer, 
+            meshData.getVertices().data(),
+            sizeof(MeshData::Vertex) * meshData.getVertices().size(),
+            sizeof(MeshData::Vertex)
+        );
 
-        cubeVertexBuffer = sgfx::createBuffer(sgfx::BufferFlags::VertexBuffer, cubeVertices, sizeof(CommonVertex) * verticesSize, sizeof(CommonVertex));
-        cubeIndexBuffer  = sgfx::createBuffer(sgfx::BufferFlags::IndexBuffer, cubeIndices, sizeof(uint32_t) * indicesSize, sizeof(uint32_t));
+        modelIndexBuffer = sgfx::createBuffer(
+            sgfx::BufferFlags::IndexBuffer,
+            meshData.getIndices().data(),
+            sizeof(uint32_t) * meshData.getIndices().size(),
+            sizeof(uint32_t)
+        );
 
+#ifdef USE_OIT
         vsHandle = loadVS("shaders/oit_cube.hlsl");
         psHandle = loadPS("shaders/oit_cube.hlsl");
+#else
+        vsHandle = loadVS("shaders/oit_simple.hlsl");
+        psHandle = loadPS("shaders/oit_simple.hlsl");
+#endif
 
         if (vsHandle != sgfx::VertexShaderHandle::invalidHandle() && psHandle != sgfx::PixelShaderHandle::invalidHandle()) {
             ssHandle = sgfx::linkSurfaceShader(
@@ -393,17 +249,28 @@ public:
             sgfx::PipelineStateDescriptor desc;
 
             desc.rasterizerState.fillMode                           = sgfx::FillMode::Solid;
-            desc.rasterizerState.cullMode                           = sgfx::CullMode::None;
+            desc.rasterizerState.cullMode                           = sgfx::CullMode::Back;
             desc.rasterizerState.counterDirection                   = sgfx::CounterDirection::CW;
 
+#ifdef USE_OIT
             desc.blendState.blendDesc.blendEnabled                  = false;
             desc.blendState.blendDesc.writeMask                     = sgfx::ColorWriteMask::All;
             desc.blendState.blendDesc.srcBlend                      = sgfx::BlendFactor::One;
-            desc.blendState.blendDesc.dstBlend                      = sgfx::BlendFactor::One;
+            desc.blendState.blendDesc.dstBlend                      = sgfx::BlendFactor::Zero;
             desc.blendState.blendDesc.blendOp                       = sgfx::BlendOp::Add;
             desc.blendState.blendDesc.srcBlendAlpha                 = sgfx::BlendFactor::One;
             desc.blendState.blendDesc.dstBlendAlpha                 = sgfx::BlendFactor::Zero;
             desc.blendState.blendDesc.blendOpAlpha                  = sgfx::BlendOp::Add;
+#else
+            desc.blendState.blendDesc.blendEnabled                  = true;
+            desc.blendState.blendDesc.writeMask                     = sgfx::ColorWriteMask::All;
+            desc.blendState.blendDesc.srcBlend                      = sgfx::BlendFactor::SrcColor;
+            desc.blendState.blendDesc.dstBlend                      = sgfx::BlendFactor::OneMinusSrcAlpha;
+            desc.blendState.blendDesc.blendOp                       = sgfx::BlendOp::Add;
+            desc.blendState.blendDesc.srcBlendAlpha                 = sgfx::BlendFactor::One;
+            desc.blendState.blendDesc.dstBlendAlpha                 = sgfx::BlendFactor::Zero;
+            desc.blendState.blendDesc.blendOpAlpha                  = sgfx::BlendOp::Add;
+#endif
 
             desc.depthStencilState.depthEnabled                     = true;
             desc.depthStencilState.writeMask                        = sgfx::DepthWriteMask::Zero;
@@ -451,8 +318,8 @@ public:
         sgfx::releaseSurfaceShader(oitSS);
 #endif
 
-        sgfx::releaseBuffer(cubeVertexBuffer);
-        sgfx::releaseBuffer(cubeIndexBuffer);
+        sgfx::releaseBuffer(modelVertexBuffer);
+        sgfx::releaseBuffer(modelIndexBuffer);
         sgfx::releaseConstantBuffer(constantBuffer);
         sgfx::releaseVertexFormat(vertexFormat);
         sgfx::releaseVertexShader(vsHandle);
@@ -480,8 +347,8 @@ public:
         t = (dwTimeCur - dwTimeStart) / 1000.0f;
 
         glm::mat4 projection = glm::perspective(glm::pi<float>() / 2.0F, width / (FLOAT)height, 0.01f, 100.0f);
-        glm::mat4 view       = glm::lookAt(glm::vec3(0.0F, 3.0F, -5.0F), glm::vec3(0.0F, 1.0F, 0.0F), glm::vec3(0.0F, 1.0F, 0.0F));
-        glm::mat4 world      = glm::rotate(glm::mat4(1.0F), t, glm::vec3(0.0F, 1.0F, 0.0F));
+        glm::mat4 view       = glm::lookAt(glm::vec3(0.0F, 0.0F, -3.0F), glm::vec3(0.0F, 0.0F, 0.0F), glm::vec3(0.0F, 1.0F, 0.0F));
+        glm::mat4 world      = glm::scale(glm::mat4(1.0F), glm::vec3(2.5F)) * glm::rotate(glm::mat4(1.0F), t, glm::vec3(0.0F, 1.0F, 0.0F));
 
         glm::mat4 mvp = projection * view * world;
 
@@ -493,21 +360,21 @@ public:
         // clear from the previous frame and set RT
         sgfx::clearTextureRW(oitHeadBuffer, 0xffffffff);
         sgfx::clearBufferRW(oitListBuffer, 0xffffffff);
+#endif
 
         sgfx::clearRenderTarget(renderTarget, 0xFF000000);
         sgfx::clearDepthStencil(renderTarget, 1.0F, 0);
         sgfx::setRenderTarget(renderTarget);
         sgfx::setViewport(width, height, 0.0F, 1.0F);
-#endif
 
         // draw cubes to the OIT buffer
         sgfx::beginPerfEvent(L"OITRender");
         {
             sgfx::setPrimitiveTopology(drawQueue, sgfx::PrimitiveTopology::TriangleList);
             sgfx::setConstantBuffer(drawQueue, 0, constantBuffer);
-            sgfx::setVertexBuffer(drawQueue, cubeVertexBuffer);
-            sgfx::setIndexBuffer(drawQueue, cubeIndexBuffer);
-            sgfx::drawIndexedInstanced(drawQueue, 2, 36, 0, 0);
+            sgfx::setVertexBuffer(drawQueue, modelVertexBuffer);
+            sgfx::setIndexBuffer(drawQueue, modelIndexBuffer);
+            sgfx::drawIndexed(drawQueue, meshData.getIndices().size(), 0, 0);
 
             sgfx::submit(drawQueue);
         }

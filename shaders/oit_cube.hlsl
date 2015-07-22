@@ -12,8 +12,6 @@ struct VS_INPUT
     uint   boneIDs     : BONEIDS;
     float4 boneWeights : BONEWEIGHTS;
     uint   vertexColor : VCOLOR;
-
-    uint   instanceID  : SV_InstanceID;
 };
 
 struct VS_OUTPUT
@@ -28,14 +26,14 @@ struct VS_OUTPUT
 VS_OUTPUT vs_main(VS_INPUT input)
 {
     VS_OUTPUT output = (VS_OUTPUT)0;
-    float4 position = float4(input.position * (float(input.instanceID) * 0.5 + 1.0), 1.0);
+    float4 position = float4(input.position, 1.0);
     output.position = mul(position, mvp);
 
     output.texcoord0 = input.texcoord0;
     output.texcoord1 = input.texcoord1;
     output.normal    = input.normal;
 
-    output.color     = float4(float(0.2).xxx * abs(input.normal), 1.0);
+    output.color     = float4(float(0.5).xxx * abs(input.normal), 0.5);
 
     return output;
 }
