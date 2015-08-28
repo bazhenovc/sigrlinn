@@ -15,8 +15,6 @@ endif()
 
 file(GLOB src          sigrlinn/*.cc)
 file(GLOB hdr          sigrlinn/*.hh)
-file(GLOB src_internal sigrlinn/private/*.cc)
-file(GLOB hdr_internal sigrlinn/private/*.hh)
 
 file(GLOB demo_common_src demo/common/*.cc)
 file(GLOB demo_common_hdr demo/common/*.hh)
@@ -26,8 +24,6 @@ file(GLOB demo_hdr demo/*.hh)
 
 source_group("source"            FILES ${src})
 source_group("include"           FILES ${hdr})
-source_group("source\\internal"  FILES ${src_internal})
-source_group("include\\internal" FILES ${hdr_internal})
 source_group("glew"              FILES sigrlinn/GL/glew.c sigrlinn/GL/glew.h sigrlinn/GL/glxew.h sigrlinn/GL/wglew.h)
 
 source_group("demo\\common\\source"  FILES ${demo_common_src})
@@ -48,10 +44,10 @@ include_directories(${CMAKE_SOURCE_DIR}/external/glm/)
 
 if(D3D12_FOUND)
     message("D3D12 found")
-    add_library(SigrlinnD3D12 ${hdr} ${hdr_internal} ${src_internal} sigrlinn/sigrlinn_d3d12.cc)
+    add_library(SigrlinnD3D12 ${hdr} sigrlinn/sigrlinn_d3d12.cc)
 endif()
-add_library(SigrlinnD3D11 ${hdr} ${hdr_internal} ${src_internal} sigrlinn/sigrlinn_d3d11.cc)
-add_library(SigrlinnGL4   ${hdr} ${hdr_internal} ${src_internal} ${SGFX_GLEW_SRC} sigrlinn/sigrlinn_gl4.cc)
+add_library(SigrlinnD3D11 ${hdr} sigrlinn/sigrlinn_d3d11.cc)
+add_library(SigrlinnGL4   ${hdr} ${SGFX_GLEW_SRC} sigrlinn/sigrlinn_gl4.cc)
 
 function(AddDemo Name Source)
 

@@ -20,17 +20,35 @@
 /// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 /// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 /// THE SOFTWARE.
-#include "sigrlinn.hh"
-
 #include "GL/glew.h"
 #include <memory>
 
-#include "private/drawqueue.hh"
-
 #pragma comment(lib, "opengl32.lib")
+
+#ifndef SGFX_NS_INTERNAL
+#define SGFX_NS_INTERNAL sgfx_ns_opengl_internal
+#endif
+
+#ifndef SGFX_INTERNAL_IMPLEMENTATION
+#define SGFX_INTERNAL_IMPLEMENTATION 1
+#endif // !SGFX_INTERNAL_IMPLEMENTATION
+
+#ifdef _MSC_VER
+#   ifndef SGFX_FORCE_INLINE
+#   define SGFX_FORCE_INLINE __forceinline
+#   endif
+#else
+#   ifndef SGFX_FORCE_INLINE
+#   define SGFX_FORCE_INLINE __attribute__((always_inline))
+#   endif
+#endif
+
+#include "sigrlinn.hh"
 
 namespace sgfx
 {
+
+using namespace SGFX_NS_INTERNAL;
 
 struct GLTexFilter final
 {
@@ -211,8 +229,8 @@ struct GLShaderImpl final
 {
     GLuint shaderID = 0;
 
-    inline GLShaderImpl(GLuint shader) : shaderID(shader) {}
-    inline ~GLShaderImpl() { glDeleteShader(shaderID); }
+    SGFX_FORCE_INLINE GLShaderImpl(GLuint shader) : shaderID(shader) {}
+    SGFX_FORCE_INLINE ~GLShaderImpl() { glDeleteShader(shaderID); }
 };
 
 struct GLBufferImpl final
@@ -226,16 +244,16 @@ struct GLBufferImpl final
     size_t dataSize   = 0;
     size_t dataStride = 0;
 
-    inline GLBufferImpl()  { glGenBuffers(1, &bufferID); }
-    inline ~GLBufferImpl() { glDeleteBuffers(1, &bufferID); }
+    SGFX_FORCE_INLINE GLBufferImpl()  { glGenBuffers(1, &bufferID); }
+    SGFX_FORCE_INLINE ~GLBufferImpl() { glDeleteBuffers(1, &bufferID); }
 };
 
 struct GLVertexFormatImpl final // VF is a VAO with bound attribs
 {
     GLuint vaoID = 0;
 
-    inline GLVertexFormatImpl()  { glGenVertexArrays(1, &vaoID); }
-    inline ~GLVertexFormatImpl() { glDeleteVertexArrays(1, &vaoID); }
+    SGFX_FORCE_INLINE GLVertexFormatImpl()  { glGenVertexArrays(1, &vaoID); }
+    SGFX_FORCE_INLINE ~GLVertexFormatImpl() { glDeleteVertexArrays(1, &vaoID); }
 };
 
 struct GLTextureImpl final
@@ -246,13 +264,13 @@ struct GLTextureImpl final
     GLenum   glInternalFormat = 0;
     GLenum   glType           = 0;
 
-    inline GLTextureImpl()  { glGenTextures(1, &textureID); }
-    inline ~GLTextureImpl() { glDeleteTextures(1, &textureID); }
+    SGFX_FORCE_INLINE GLTextureImpl()  { glGenTextures(1, &textureID); }
+    SGFX_FORCE_INLINE ~GLTextureImpl() { glDeleteTextures(1, &textureID); }
 };
 
 //-------------------------------------------------------------------------------------------------
 
-static inline GLenum GL_getInternalFormat(DataFormat format)
+static SGFX_FORCE_INLINE GLenum GL_getInternalFormat(DataFormat format)
 {
     switch (format) {
     case DataFormat::BC1:        { return GL_RGB; } break;
@@ -304,7 +322,7 @@ static inline GLenum GL_getInternalFormat(DataFormat format)
     return 0; // make compiler happy
 }
 
-static inline GLenum GL_getInternalType(DataFormat format)
+static SGFX_FORCE_INLINE GLenum GL_getInternalType(DataFormat format)
 {
     switch (format) {
     case DataFormat::BC6H:
@@ -333,7 +351,7 @@ static inline GLenum GL_getInternalType(DataFormat format)
     return 0;
 }
 
-static inline GLint GL_getInternalSize(DataFormat format)
+static SGFX_FORCE_INLINE GLint GL_getInternalSize(DataFormat format)
 {
     switch (format) {
     case DataFormat::R8:      { return 1; } break;
@@ -362,7 +380,7 @@ static inline GLint GL_getInternalSize(DataFormat format)
     }
 }
 
-static inline GLsizei GL_getInternalStride(DataFormat format)
+static SGFX_FORCE_INLINE GLsizei GL_getInternalStride(DataFormat format)
 {
     switch (format) {
     case DataFormat::R8:      { return 1;  } break;
@@ -512,22 +530,22 @@ static void GL_setPipelineState(PipelineStateHandle handle)
     }
 }
 
-static void GL_processDrawQueue(internal::DrawQueue* queue)
+static void GL_processDrawQueue(DrawQueue* queue)
 {
     GL_setPipelineState(queue->getState());
 
     // set sampler states
-    GLuint samplers[internal::DrawQueue::kMaxSamplerStates] = { 0 };
-    for (size_t i = 0; i < internal::DrawQueue::kMaxSamplerStates; ++i) {
+    GLuint samplers[DrawQueue::kMaxSamplerStates] = { 0 };
+    for (size_t i = 0; i < DrawQueue::kMaxSamplerStates; ++i) {
         GLSamplerStateImpl* samplerState = static_cast<GLSamplerStateImpl*>(queue->samplerStates[i].value);
 
         if (samplerState != nullptr)
             samplers[i] = samplerState->samplerID;
     }
-    glBindSamplers(0, internal::DrawQueue::kMaxSamplerStates, samplers);
+    glBindSamplers(0, DrawQueue::kMaxSamplerStates, samplers);
 
     // process draw calls
-    for (const internal::DrawCall& call: queue->getDrawCalls()) {
+    for (const DrawCall& call: queue->getDrawCalls()) {
 
         // vertex and index buffers
         GLBufferImpl* vertexBuffer = static_cast<GLBufferImpl*>(call.vertexBuffer.value);
@@ -545,14 +563,14 @@ static void GL_processDrawQueue(internal::DrawQueue* queue)
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibuffer);
 
         // constant buffers
-        GLuint constantBuffers[internal::DrawCall::kMaxConstantBuffers] = { 0 };
-        for (size_t i = 0; i < internal::DrawCall::kMaxConstantBuffers; ++i) {
+        GLuint constantBuffers[DrawCall::kMaxConstantBuffers] = { 0 };
+        for (size_t i = 0; i < DrawCall::kMaxConstantBuffers; ++i) {
             GLBufferImpl* buffer = static_cast<GLBufferImpl*>(call.constantBuffers[i].value);
 
             if (buffer != nullptr)
                 constantBuffers[i] = buffer->bufferID;
         }
-        glBindBuffersBase(GL_UNIFORM_BUFFER, 0, internal::DrawCall::kMaxConstantBuffers, constantBuffers);
+        glBindBuffersBase(GL_UNIFORM_BUFFER, 0, DrawCall::kMaxConstantBuffers, constantBuffers);
 
         // shader resources
         // this is a tricky part, because it can be either a buffer or a texture
@@ -564,14 +582,14 @@ static void GL_processDrawQueue(internal::DrawQueue* queue)
         };
 
         GLsizei count = 0;
-        GLuint  shaderResources[internal::DrawCall::kMaxShaderResources] = { 0 };
+        GLuint  shaderResources[DrawCall::kMaxShaderResources] = { 0 };
         
         SRVType prevType    = call.shaderResources[0].isTexture ? SRV_Texture : SRV_Buffer;
         SRVType currentType = SRV_None;
         GLsizei lastIndex   = 0;
 
-        for (GLsizei i = 0; i < internal::DrawCall::kMaxShaderResources; ++i) {
-            const internal::ShaderResource& resource = call.shaderResources[i];
+        for (GLsizei i = 0; i < DrawCall::kMaxShaderResources; ++i) {
+            const ShaderResource& resource = call.shaderResources[i];
 
             if (resource.isTexture)
                 currentType = SRV_Texture;
@@ -616,10 +634,10 @@ static void GL_processDrawQueue(internal::DrawQueue* queue)
         GLenum topology = MapPrimitiveTopology[static_cast<size_t>(call.primitiveTopology)];
 
         switch (call.type) {
-        case internal::DrawCall::Draw:                 { glDrawArrays(topology, call.count, call.startVertex); } break;
-        case internal::DrawCall::DrawIndexed:          { glDrawElements(topology, call.count, GL_UNSIGNED_INT, reinterpret_cast<const GLvoid*>(call.startIndex)); } break;
-        case internal::DrawCall::DrawInstanced:        { glDrawArraysInstanced(topology, 0, call.instanceCount, call.count); } break;
-        case internal::DrawCall::DrawIndexedInstanced: { glDrawElementsInstanced(topology, call.instanceCount, GL_UNSIGNED_INT, reinterpret_cast<const GLvoid*>(call.startIndex), call.count); } break;
+        case DrawCall::Draw:                 { glDrawArrays(topology, call.count, call.startVertex); } break;
+        case DrawCall::DrawIndexed:          { glDrawElements(topology, call.count, GL_UNSIGNED_INT, reinterpret_cast<const GLvoid*>(call.startIndex)); } break;
+        case DrawCall::DrawInstanced:        { glDrawArraysInstanced(topology, 0, call.instanceCount, call.count); } break;
+        case DrawCall::DrawIndexedInstanced: { glDrawElementsInstanced(topology, call.instanceCount, GL_UNSIGNED_INT, reinterpret_cast<const GLvoid*>(call.startIndex), call.count); } break;
         }
     }
 }
@@ -986,14 +1004,14 @@ void releaseTexture(TextureHandle handle)
 
 DrawQueueHandle createDrawQueue(PipelineStateHandle state)
 {
-    internal::DrawQueue* queue = new internal::DrawQueue(state);
+    DrawQueue* queue = new DrawQueue(state);
     return DrawQueueHandle(queue);
 }
 
 void releaseDrawQueue(DrawQueueHandle handle)
 {
     if (handle != DrawQueueHandle::invalidHandle()) {
-        internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
+        DrawQueue* queue = static_cast<DrawQueue*>(handle.value);
         delete queue;
     }
 }
@@ -1001,7 +1019,7 @@ void releaseDrawQueue(DrawQueueHandle handle)
 void setSamplerState(DrawQueueHandle handle, uint32_t idx, SamplerStateHandle sampler)
 {
     if (handle != DrawQueueHandle::invalidHandle()) {
-        internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
+        DrawQueue* queue = static_cast<DrawQueue*>(handle.value);
         queue->setSamplerState(idx, sampler);
     }
 }
@@ -1009,7 +1027,7 @@ void setSamplerState(DrawQueueHandle handle, uint32_t idx, SamplerStateHandle sa
 void setPrimitiveTopology(DrawQueueHandle handle, PrimitiveTopology topology)
 {
     if (handle != DrawQueueHandle::invalidHandle()) {
-        internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
+        DrawQueue* queue = static_cast<DrawQueue*>(handle.value);
         queue->setPrimitiveTopology(topology);
     }
 }
@@ -1017,7 +1035,7 @@ void setPrimitiveTopology(DrawQueueHandle handle, PrimitiveTopology topology)
 void setVertexBuffer(DrawQueueHandle handle, BufferHandle vb)
 {
     if (handle != DrawQueueHandle::invalidHandle()) {
-        internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
+        DrawQueue* queue = static_cast<DrawQueue*>(handle.value);
         queue->setVertexBuffer(vb);
     }
 }
@@ -1025,7 +1043,7 @@ void setVertexBuffer(DrawQueueHandle handle, BufferHandle vb)
 void setIndexBuffer(DrawQueueHandle handle, BufferHandle ib)
 {
     if (handle != DrawQueueHandle::invalidHandle()) {
-        internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
+        DrawQueue* queue = static_cast<DrawQueue*>(handle.value);
         queue->setIndexBuffer(ib);
     }
 }
@@ -1033,7 +1051,7 @@ void setIndexBuffer(DrawQueueHandle handle, BufferHandle ib)
 void setConstantBuffer(DrawQueueHandle handle, uint32_t idx, ConstantBufferHandle buffer)
 {
     if (handle != DrawQueueHandle::invalidHandle()) {
-        internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
+        DrawQueue* queue = static_cast<DrawQueue*>(handle.value);
         queue->setConstantBuffer(idx, buffer);
     }
 }
@@ -1041,7 +1059,7 @@ void setConstantBuffer(DrawQueueHandle handle, uint32_t idx, ConstantBufferHandl
 void setResource(DrawQueueHandle handle, uint32_t idx, BufferHandle resource)
 {
     if (handle != DrawQueueHandle::invalidHandle()) {
-        internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
+        DrawQueue* queue = static_cast<DrawQueue*>(handle.value);
         queue->setResource(idx, resource);
     }
 }
@@ -1049,7 +1067,7 @@ void setResource(DrawQueueHandle handle, uint32_t idx, BufferHandle resource)
 void setResource(DrawQueueHandle handle, uint32_t idx, TextureHandle resource)
 {
     if (handle != DrawQueueHandle::invalidHandle()) {
-        internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
+        DrawQueue* queue = static_cast<DrawQueue*>(handle.value);
         queue->setResource(idx, resource);
     }
 }
@@ -1057,7 +1075,7 @@ void setResource(DrawQueueHandle handle, uint32_t idx, TextureHandle resource)
 void draw(DrawQueueHandle handle, uint32_t count, uint32_t startVertex)
 {
     if (handle != DrawQueueHandle::invalidHandle()) {
-        internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
+        DrawQueue* queue = static_cast<DrawQueue*>(handle.value);
         queue->draw(count, startVertex);
     }
 }
@@ -1065,7 +1083,7 @@ void draw(DrawQueueHandle handle, uint32_t count, uint32_t startVertex)
 void drawIndexed(DrawQueueHandle handle, uint32_t count, uint32_t startIndex, uint32_t startVertex)
 {
     if (handle != DrawQueueHandle::invalidHandle()) {
-        internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
+        DrawQueue* queue = static_cast<DrawQueue*>(handle.value);
         queue->drawIndexed(count, startIndex, startVertex);
     }
 }
@@ -1073,7 +1091,7 @@ void drawIndexed(DrawQueueHandle handle, uint32_t count, uint32_t startIndex, ui
 void drawInstanced(DrawQueueHandle handle, uint32_t instanceCount, uint32_t count, uint32_t startVertex)
 {
     if (handle != DrawQueueHandle::invalidHandle()) {
-        internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
+        DrawQueue* queue = static_cast<DrawQueue*>(handle.value);
         queue->drawInstanced(instanceCount, count, startVertex);
     }
 }
@@ -1081,7 +1099,7 @@ void drawInstanced(DrawQueueHandle handle, uint32_t instanceCount, uint32_t coun
 void drawIndexedInstanced(DrawQueueHandle handle, uint32_t instanceCount, uint32_t count, uint32_t startIndex, uint32_t startVertex)
 {
     if (handle != DrawQueueHandle::invalidHandle()) {
-        internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
+        DrawQueue* queue = static_cast<DrawQueue*>(handle.value);
         queue->drawIndexedInstanced(instanceCount, count, startIndex, startVertex);
     }
 }
@@ -1089,7 +1107,7 @@ void drawIndexedInstanced(DrawQueueHandle handle, uint32_t instanceCount, uint32
 void submit(DrawQueueHandle handle)
 {
     if (handle != DrawQueueHandle::invalidHandle()) {
-        internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
+        DrawQueue* queue = static_cast<DrawQueue*>(handle.value);
         GL_processDrawQueue(queue);
         queue->clear();
     }

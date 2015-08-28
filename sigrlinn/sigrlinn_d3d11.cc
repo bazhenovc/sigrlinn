@@ -24,16 +24,6 @@
 #include <d3dcompiler.h>
 #include <memory>
 
-#ifndef SGFX_D3D11_INTEROP
-#define SGFX_D3D11_INTEROP 1
-#endif
-
-#include "sigrlinn.hh"
-#include "private/drawqueue.hh"
-#include "private/computequeue.hh"
-
-#include <stdlib.h>
-
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "d3dcompiler.lib")
 
@@ -41,8 +31,35 @@
 #include <d3d11_1.h>
 #endif
 
+#ifndef SGFX_D3D11_INTEROP
+#define SGFX_D3D11_INTEROP 1
+#endif
+
+#ifndef SGFX_NS_INTERNAL
+#define SGFX_NS_INTERNAL sgfx_ns_d3d11_internal
+#endif
+
+#ifndef SGFX_INTERNAL_IMPLEMENTATION
+#define SGFX_INTERNAL_IMPLEMENTATION 1
+#endif
+
+#ifdef _MSC_VER
+#   ifndef SGFX_FORCE_INLINE
+#   define SGFX_FORCE_INLINE __forceinline
+#   endif
+#else
+#   ifndef SGFX_FORCE_INLINE
+#   define SGFX_FORCE_INLINE __attribute__((always_inline))
+#   endif
+#endif
+
+#include "sigrlinn.hh"
+#include <stdlib.h>
+
 namespace sgfx
 {
+
+using namespace SGFX_NS_INTERNAL;
 
 static D3D11_MAP MapMapType[MapType::Count] = {
     D3D11_MAP_READ,
@@ -232,15 +249,15 @@ struct DXSharedBuffer final
     ID3D11UnorderedAccessView* dataUAV          = 0;
     size_t                     dataBufferSize   = 0;
 
-    inline DXSharedBuffer() {}
-    inline ~DXSharedBuffer()
+    SGFX_FORCE_INLINE DXSharedBuffer() {}
+    SGFX_FORCE_INLINE ~DXSharedBuffer()
     {
         if (dataBuffer != nullptr) dataBuffer->Release();
         if (dataView   != nullptr) dataView->Release();
         if (dataUAV    != nullptr) dataUAV->Release();
     }
 
-    inline void createView(size_t numElements)
+    SGFX_FORCE_INLINE void createView(size_t numElements)
     {
         D3D11_SHADER_RESOURCE_VIEW_DESC viewDesc;
         std::memset(&viewDesc, 0, sizeof(viewDesc));
@@ -254,7 +271,7 @@ struct DXSharedBuffer final
         }
     }
 
-    inline void createUAV(size_t numElements, bool isCounter)
+    SGFX_FORCE_INLINE void createUAV(size_t numElements, bool isCounter)
     {
         D3D11_UNORDERED_ACCESS_VIEW_DESC uavDesc;
         std::memset(&uavDesc, 0, sizeof(uavDesc));
@@ -283,11 +300,11 @@ struct DXStateCache final
 
     uint32_t type;
 
-    ID3D11SamplerState*         samplerStates[internal::DrawQueue::kMaxSamplerStates];
-    ID3D11Buffer*               constantBuffers[internal::DrawCall::kMaxConstantBuffers];
-    ID3D11ShaderResourceView*   shaderResourceViews[internal::DrawCall::kMaxShaderResources];
-    ID3D11UnorderedAccessView*  shaderUAVs[internal::ComputeQueue::kMaxShaderResourcesRW];
-    uint32_t                    shaderUAVCounters[internal::ComputeQueue::kMaxShaderResourcesRW];
+    ID3D11SamplerState*         samplerStates[DrawQueue::kMaxSamplerStates];
+    ID3D11Buffer*               constantBuffers[DrawCall::kMaxConstantBuffers];
+    ID3D11ShaderResourceView*   shaderResourceViews[DrawCall::kMaxShaderResources];
+    ID3D11UnorderedAccessView*  shaderUAVs[ComputeQueue::kMaxShaderResourcesRW];
+    uint32_t                    shaderUAVCounters[ComputeQueue::kMaxShaderResourcesRW];
 
     bool vs = false;
     bool hs = false;
@@ -295,14 +312,14 @@ struct DXStateCache final
     bool gs = false;
     bool ps = false;
 
-    inline DXStateCache(uint32_t newType)
+    SGFX_FORCE_INLINE DXStateCache(uint32_t newType)
     {
         clear();
 
         type = newType;
     }
 
-    inline void clear()
+    SGFX_FORCE_INLINE void clear()
     {
         std::memset(samplerStates, 0, sizeof(samplerStates));
         std::memset(constantBuffers, 0, sizeof(constantBuffers));
@@ -311,9 +328,9 @@ struct DXStateCache final
         std::memset(shaderUAVCounters, 0, sizeof(shaderUAVCounters));
     }
 
-    inline void setSamplerStates(const SamplerStateHandle* handles)
+    SGFX_FORCE_INLINE void setSamplerStates(const SamplerStateHandle* handles)
     {
-        for (size_t i = 0; i < internal::DrawQueue::kMaxSamplerStates; ++i) {
+        for (size_t i = 0; i < DrawQueue::kMaxSamplerStates; ++i) {
             ID3D11SamplerState* state = static_cast<ID3D11SamplerState*>(handles[i].value);
             if (state != samplerStates[i]) {
                 samplerStates[i] = state;
@@ -332,9 +349,9 @@ struct DXStateCache final
         }
     }
 
-    inline void setConstantBuffers(const ConstantBufferHandle* handles)
+    SGFX_FORCE_INLINE void setConstantBuffers(const ConstantBufferHandle* handles)
     {
-        for (size_t i = 0; i < internal::DrawCall::kMaxConstantBuffers; ++i) {
+        for (size_t i = 0; i < DrawCall::kMaxConstantBuffers; ++i) {
             ID3D11Buffer* state = static_cast<ID3D11Buffer*>(handles[i].value);
             if (state != constantBuffers[i]) {
                 constantBuffers[i] = state;
@@ -353,9 +370,9 @@ struct DXStateCache final
         }
     }
 
-    inline void setShaderResources(const internal::ShaderResource* resources)
+    SGFX_FORCE_INLINE void setShaderResources(const ShaderResource* resources)
     {
-        for (size_t i = 0; i < internal::DrawCall::kMaxShaderResources; ++i) {
+        for (size_t i = 0; i < DrawCall::kMaxShaderResources; ++i) {
             DXSharedBuffer* buffer = static_cast<DXSharedBuffer*>(resources[i].value);
 
             ID3D11ShaderResourceView* state = nullptr;
@@ -379,9 +396,9 @@ struct DXStateCache final
         }
     }
 
-    inline void setShaderResourcesRW(const internal::ShaderResource* resources)
+    SGFX_FORCE_INLINE void setShaderResourcesRW(const ShaderResource* resources)
     {
-        for (size_t i = 0; i < internal::ComputeQueue::kMaxShaderResourcesRW; ++i) {
+        for (size_t i = 0; i < ComputeQueue::kMaxShaderResourcesRW; ++i) {
             DXSharedBuffer* buffer = static_cast<DXSharedBuffer*>(resources[i].value);
 
             ID3D11UnorderedAccessView* state = nullptr;
@@ -439,14 +456,14 @@ struct RenderTargetImpl final
     ID3D11UnorderedAccessView*  unorderedAccessViews[RenderTargetSlot::Count];
     uint32_t                    uavCounters[RenderTargetSlot::Count];
 
-    inline RenderTargetImpl()
+    SGFX_FORCE_INLINE RenderTargetImpl()
     {
         std::memset(renderTargetViews, 0, sizeof(renderTargetViews));
         std::memset(unorderedAccessViews, 0, sizeof(unorderedAccessViews));
         std::memset(uavCounters, 0, sizeof(uavCounters));
     }
 
-    inline ~RenderTargetImpl()
+    SGFX_FORCE_INLINE ~RenderTargetImpl()
     {
         for (size_t i = 0; i < RenderTargetSlot::Count; ++i) {
             if (renderTargetViews[i] != nullptr)
@@ -459,7 +476,7 @@ struct RenderTargetImpl final
     }
 };
 
-static inline UINT dxFormatStride(DataFormat format)
+static SGFX_FORCE_INLINE UINT dxFormatStride(DataFormat format)
 {
     switch (format) {
     case DataFormat::R8:      { return 1;  } break;
@@ -510,7 +527,7 @@ static void dxSetPipelineState(PipelineStateHandle handle)
     }
 }
 
-static void dxProcessDrawQueue(internal::DrawQueue* queue)
+static void dxProcessDrawQueue(DrawQueue* queue)
 {
     PipelineStateImpl* psimpl = static_cast<PipelineStateImpl*>(queue->getState().value);
 
@@ -519,7 +536,7 @@ static void dxProcessDrawQueue(internal::DrawQueue* queue)
     psimpl->stateCache.setSamplerStates(queue->samplerStates);
 
     // process draw calls
-    for (const internal::DrawCall& call: queue->getDrawCalls()) {
+    for (const DrawCall& call: queue->getDrawCalls()) {
         DXSharedBuffer* vertexBuffer = static_cast<DXSharedBuffer*>(call.vertexBuffer.value);
         DXSharedBuffer* indexBuffer  = static_cast<DXSharedBuffer*>(call.indexBuffer.value);
         UINT            offset       = 0;
@@ -545,10 +562,10 @@ static void dxProcessDrawQueue(internal::DrawQueue* queue)
         psimpl->stateCache.setShaderResources(call.shaderResources);
 
         switch (call.type) {
-        case internal::DrawCall::Draw:                 { g_pImmediateContext->Draw(call.count, call.startVertex); } break;
-        case internal::DrawCall::DrawIndexed:          { g_pImmediateContext->DrawIndexed(call.count, call.startIndex, call.startVertex); } break;
-        case internal::DrawCall::DrawInstanced:        { g_pImmediateContext->DrawInstanced(call.count, call.instanceCount, call.startVertex, 0); } break;
-        case internal::DrawCall::DrawIndexedInstanced: { g_pImmediateContext->DrawIndexedInstanced(call.count, call.instanceCount, call.startIndex, call.startVertex, 0); } break;
+        case DrawCall::Draw:                 { g_pImmediateContext->Draw(call.count, call.startVertex); } break;
+        case DrawCall::DrawIndexed:          { g_pImmediateContext->DrawIndexed(call.count, call.startIndex, call.startVertex); } break;
+        case DrawCall::DrawInstanced:        { g_pImmediateContext->DrawInstanced(call.count, call.instanceCount, call.startVertex, 0); } break;
+        case DrawCall::DrawIndexedInstanced: { g_pImmediateContext->DrawIndexedInstanced(call.count, call.instanceCount, call.startIndex, call.startVertex, 0); } break;
         }
     }
 
@@ -556,13 +573,13 @@ static void dxProcessDrawQueue(internal::DrawQueue* queue)
 }
 
 template <typename T, typename ...Args>
-static inline T* sgfx_new(Args&... args)
+static SGFX_FORCE_INLINE T* sgfx_new(Args&... args)
 {
     return new (g_allocFunc(sizeof(T))) T(static_cast<Args&&>(args)...);
 }
 
 template <typename T>
-static inline void sgfx_delete(T* t)
+static SGFX_FORCE_INLINE void sgfx_delete(T* t)
 {
     t->~T();
     g_freeFunc(t);
@@ -852,7 +869,7 @@ void releaseSurfaceShader(SurfaceShaderHandle handle)
 
 ComputeQueueHandle createComputeQueue(ComputeShaderHandle shader)
 {
-    internal::ComputeQueue* queue = sgfx::sgfx_new<internal::ComputeQueue>();
+    ComputeQueue* queue = sgfx::sgfx_new<ComputeQueue>();
     queue->shader = shader;
 
     return ComputeQueueHandle(queue);
@@ -861,7 +878,7 @@ ComputeQueueHandle createComputeQueue(ComputeShaderHandle shader)
 void releaseComputeQueue(ComputeQueueHandle handle)
 {
     if (handle != ComputeQueueHandle::invalidHandle()) {
-        internal::ComputeQueue* queue = static_cast<internal::ComputeQueue*>(handle.value);
+        ComputeQueue* queue = static_cast<ComputeQueue*>(handle.value);
         sgfx_delete(queue);
     }
 }
@@ -869,7 +886,7 @@ void releaseComputeQueue(ComputeQueueHandle handle)
 void setConstantBuffer(ComputeQueueHandle handle, uint32_t idx, ConstantBufferHandle buffer)
 {
     if (handle != ComputeQueueHandle::invalidHandle()) {
-        internal::ComputeQueue* queue = static_cast<internal::ComputeQueue*>(handle.value);
+        ComputeQueue* queue = static_cast<ComputeQueue*>(handle.value);
         queue->setConstantBuffer(idx, buffer);
     }
 }
@@ -877,7 +894,7 @@ void setConstantBuffer(ComputeQueueHandle handle, uint32_t idx, ConstantBufferHa
 void setResource(ComputeQueueHandle handle, uint32_t idx, BufferHandle resource)
 {
     if (handle != ComputeQueueHandle::invalidHandle()) {
-        internal::ComputeQueue* queue = static_cast<internal::ComputeQueue*>(handle.value);
+        ComputeQueue* queue = static_cast<ComputeQueue*>(handle.value);
         queue->setResource(idx, resource);
     }
 }
@@ -885,7 +902,7 @@ void setResource(ComputeQueueHandle handle, uint32_t idx, BufferHandle resource)
 void setResource(ComputeQueueHandle handle, uint32_t idx, TextureHandle resource)
 {
     if (handle != ComputeQueueHandle::invalidHandle()) {
-        internal::ComputeQueue* queue = static_cast<internal::ComputeQueue*>(handle.value);
+        ComputeQueue* queue = static_cast<ComputeQueue*>(handle.value);
         queue->setResource(idx, resource);
     }
 }
@@ -893,7 +910,7 @@ void setResource(ComputeQueueHandle handle, uint32_t idx, TextureHandle resource
 void setResourceRW(ComputeQueueHandle handle, uint32_t idx, BufferHandle resource)
 {
     if (handle != ComputeQueueHandle::invalidHandle()) {
-        internal::ComputeQueue* queue = static_cast<internal::ComputeQueue*>(handle.value);
+        ComputeQueue* queue = static_cast<ComputeQueue*>(handle.value);
         queue->setResourceRW(idx, resource);
     }
 }
@@ -901,39 +918,39 @@ void setResourceRW(ComputeQueueHandle handle, uint32_t idx, BufferHandle resourc
 void submit(ComputeQueueHandle handle, uint32_t x, uint32_t y, uint32_t z)
 {
     if (handle != ComputeQueueHandle::invalidHandle()) {
-        internal::ComputeQueue* queue   = static_cast<internal::ComputeQueue*>(handle.value);
+        ComputeQueue* queue   = static_cast<ComputeQueue*>(handle.value);
         ID3D11ComputeShader*    shader  = static_cast<ID3D11ComputeShader*>(queue->shader.value);
 
         // constant buffers are ID3D11Buffers effectively
-        ID3D11Buffer* constantBuffers[internal::ComputeQueue::kMaxConstantBuffers] = { nullptr };
-        for (size_t i = 0; i < internal::ComputeQueue::kMaxConstantBuffers; ++i)
+        ID3D11Buffer* constantBuffers[ComputeQueue::kMaxConstantBuffers] = { nullptr };
+        for (size_t i = 0; i < ComputeQueue::kMaxConstantBuffers; ++i)
             constantBuffers[i] = static_cast<ID3D11Buffer*>(queue->constantBuffers[i].value);
 
         // TODO: add statecache here!
-        g_pImmediateContext->CSSetConstantBuffers(0, internal::ComputeQueue::kMaxConstantBuffers, constantBuffers);
+        g_pImmediateContext->CSSetConstantBuffers(0, ComputeQueue::kMaxConstantBuffers, constantBuffers);
 
         // shader resources and textures
-        ID3D11ShaderResourceView* shaderResources[internal::ComputeQueue::kMaxShaderResources] = { nullptr };
-        for (size_t i = 0; i < internal::ComputeQueue::kMaxShaderResources; ++i) {
+        ID3D11ShaderResourceView* shaderResources[ComputeQueue::kMaxShaderResources] = { nullptr };
+        for (size_t i = 0; i < ComputeQueue::kMaxShaderResources; ++i) {
             DXSharedBuffer* buffer = static_cast<DXSharedBuffer*>(queue->shaderResources[i].value);
             if (buffer != nullptr)
                 shaderResources[i] = buffer->dataView;
         }
 
         // TODO: add statecache here!
-        g_pImmediateContext->CSSetShaderResources(0, internal::ComputeQueue::kMaxShaderResources, shaderResources);
+        g_pImmediateContext->CSSetShaderResources(0, ComputeQueue::kMaxShaderResources, shaderResources);
 
         // UAVs
-        ID3D11UnorderedAccessView* shaderUAVs[internal::ComputeQueue::kMaxShaderResourcesRW] = { nullptr };
-        for (size_t i = 0; i < internal::ComputeQueue::kMaxShaderResourcesRW; ++i) {
+        ID3D11UnorderedAccessView* shaderUAVs[ComputeQueue::kMaxShaderResourcesRW] = { nullptr };
+        for (size_t i = 0; i < ComputeQueue::kMaxShaderResourcesRW; ++i) {
             DXSharedBuffer* buffer = static_cast<DXSharedBuffer*>(queue->shaderResourcesRW[i].value);
             if (buffer != nullptr)
                 shaderUAVs[i] = buffer->dataUAV;
         }
 
         // TODO: add statecache here!
-        uint32_t shaderUAVCounters[internal::ComputeQueue::kMaxShaderResourcesRW] = { 0 };
-        g_pImmediateContext->CSSetUnorderedAccessViews(0, internal::ComputeQueue::kMaxShaderResourcesRW, shaderUAVs, shaderUAVCounters);
+        uint32_t shaderUAVCounters[ComputeQueue::kMaxShaderResourcesRW] = { 0 };
+        g_pImmediateContext->CSSetUnorderedAccessViews(0, ComputeQueue::kMaxShaderResourcesRW, shaderUAVs, shaderUAVCounters);
 
         // dispatch
         g_pImmediateContext->CSSetShader(shader, nullptr, 0);
@@ -1954,14 +1971,14 @@ void present(uint32_t swapInterval)
 
 DrawQueueHandle createDrawQueue(PipelineStateHandle state)
 {
-    internal::DrawQueue* queue = sgfx_new<internal::DrawQueue>(state);
+    DrawQueue* queue = sgfx_new<DrawQueue>(state);
     return DrawQueueHandle(queue);
 }
 
 void releaseDrawQueue(DrawQueueHandle handle)
 {
     if (handle != DrawQueueHandle::invalidHandle()) {
-        internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
+        DrawQueue* queue = static_cast<DrawQueue*>(handle.value);
         sgfx_delete(queue);
     }
 }
@@ -1969,7 +1986,7 @@ void releaseDrawQueue(DrawQueueHandle handle)
 void setSamplerState(DrawQueueHandle handle, uint32_t idx, SamplerStateHandle sampler)
 {
     if (handle != DrawQueueHandle::invalidHandle()) {
-        internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
+        DrawQueue* queue = static_cast<DrawQueue*>(handle.value);
         queue->setSamplerState(idx, sampler);
     }
 }
@@ -1977,7 +1994,7 @@ void setSamplerState(DrawQueueHandle handle, uint32_t idx, SamplerStateHandle sa
 void setPrimitiveTopology(DrawQueueHandle handle, PrimitiveTopology topology)
 {
     if (handle != DrawQueueHandle::invalidHandle()) {
-        internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
+        DrawQueue* queue = static_cast<DrawQueue*>(handle.value);
         queue->setPrimitiveTopology(topology);
     }
 }
@@ -1985,7 +2002,7 @@ void setPrimitiveTopology(DrawQueueHandle handle, PrimitiveTopology topology)
 void setVertexBuffer(DrawQueueHandle handle, BufferHandle vb)
 {
     if (handle != DrawQueueHandle::invalidHandle()) {
-        internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
+        DrawQueue* queue = static_cast<DrawQueue*>(handle.value);
         queue->setVertexBuffer(vb);
     }
 }
@@ -1993,7 +2010,7 @@ void setVertexBuffer(DrawQueueHandle handle, BufferHandle vb)
 void setIndexBuffer(DrawQueueHandle handle, BufferHandle ib)
 {
     if (handle != DrawQueueHandle::invalidHandle()) {
-        internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
+        DrawQueue* queue = static_cast<DrawQueue*>(handle.value);
         queue->setIndexBuffer(ib);
     }
 }
@@ -2001,7 +2018,7 @@ void setIndexBuffer(DrawQueueHandle handle, BufferHandle ib)
 void setConstantBuffer(DrawQueueHandle handle, uint32_t idx, ConstantBufferHandle buffer)
 {
     if (handle != DrawQueueHandle::invalidHandle()) {
-        internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
+        DrawQueue* queue = static_cast<DrawQueue*>(handle.value);
         queue->setConstantBuffer(idx, buffer);
     }
 }
@@ -2009,7 +2026,7 @@ void setConstantBuffer(DrawQueueHandle handle, uint32_t idx, ConstantBufferHandl
 void setResource(DrawQueueHandle handle, uint32_t idx, BufferHandle resource)
 {
     if (handle != DrawQueueHandle::invalidHandle()) {
-        internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
+        DrawQueue* queue = static_cast<DrawQueue*>(handle.value);
         queue->setResource(idx, resource);
     }
 }
@@ -2017,7 +2034,7 @@ void setResource(DrawQueueHandle handle, uint32_t idx, BufferHandle resource)
 void setResource(DrawQueueHandle handle, uint32_t idx, TextureHandle resource)
 {
     if (handle != DrawQueueHandle::invalidHandle()) {
-        internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
+        DrawQueue* queue = static_cast<DrawQueue*>(handle.value);
         queue->setResource(idx, resource);
     }
 }
@@ -2025,7 +2042,7 @@ void setResource(DrawQueueHandle handle, uint32_t idx, TextureHandle resource)
 void draw(DrawQueueHandle handle, uint32_t count, uint32_t startVertex)
 {
     if (handle != DrawQueueHandle::invalidHandle()) {
-        internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
+        DrawQueue* queue = static_cast<DrawQueue*>(handle.value);
         queue->draw(count, startVertex);
     }
 }
@@ -2033,7 +2050,7 @@ void draw(DrawQueueHandle handle, uint32_t count, uint32_t startVertex)
 void drawIndexed(DrawQueueHandle handle, uint32_t count, uint32_t startIndex, uint32_t startVertex)
 {
     if (handle != DrawQueueHandle::invalidHandle()) {
-        internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
+        DrawQueue* queue = static_cast<DrawQueue*>(handle.value);
         queue->drawIndexed(count, startIndex, startVertex);
     }
 }
@@ -2041,7 +2058,7 @@ void drawIndexed(DrawQueueHandle handle, uint32_t count, uint32_t startIndex, ui
 void drawInstanced(DrawQueueHandle handle, uint32_t instanceCount, uint32_t count, uint32_t startVertex)
 {
     if (handle != DrawQueueHandle::invalidHandle()) {
-        internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
+        DrawQueue* queue = static_cast<DrawQueue*>(handle.value);
         queue->drawInstanced(instanceCount, count, startVertex);
     }
 }
@@ -2049,7 +2066,7 @@ void drawInstanced(DrawQueueHandle handle, uint32_t instanceCount, uint32_t coun
 void drawIndexedInstanced(DrawQueueHandle handle, uint32_t instanceCount, uint32_t count, uint32_t startIndex, uint32_t startVertex)
 {
     if (handle != DrawQueueHandle::invalidHandle()) {
-        internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
+        DrawQueue* queue = static_cast<DrawQueue*>(handle.value);
         queue->drawIndexedInstanced(instanceCount, count, startIndex, startVertex);
     }
 }
@@ -2057,7 +2074,7 @@ void drawIndexedInstanced(DrawQueueHandle handle, uint32_t instanceCount, uint32
 void submit(DrawQueueHandle handle)
 {
     if (handle != DrawQueueHandle::invalidHandle()) {
-        internal::DrawQueue* queue = static_cast<internal::DrawQueue*>(handle.value);
+        DrawQueue* queue = static_cast<DrawQueue*>(handle.value);
         if (queue->getDrawCalls().GetSize() != 0) {
             dxProcessDrawQueue(queue);
             queue->clear();
