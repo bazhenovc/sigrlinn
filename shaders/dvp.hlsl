@@ -9,19 +9,20 @@ struct VertexData
     float4 boneWeights;
     uint   vertexColor;
 };
-StructuredBuffer<VertexData> g_VertexBuffer : register(b0);
-StructuredBuffer<uint>       g_IndexBuffer  : register(b1);
+StructuredBuffer<VertexData> g_VertexBuffer : register(t0);
+StructuredBuffer<uint>       g_IndexBuffer  : register(t1);
 
 // pipeline state
 #define DRAW 0
 #define DRAW_INDEXED 1
 struct ConstantData
 {
-    uint4 internalData;
-
-    row_major matrix mvp;
+    uint4               internalData;
+    row_major matrix    mvp;
+    float4              boundingBoxMin;
+    float4              boundingBoxMax;
 };
-StructuredBuffer<ConstantData> g_ConstantBuffer : register(b2);
+StructuredBuffer<ConstantData> g_ConstantBuffer : register(t2);
 
 // samplers and textures
 Texture2D    textureDiffuse : register(t3);
@@ -55,7 +56,7 @@ VS_OUTPUT vs_main(VS_INPUT input)
     uint vbID     = cdata.internalData[0];
     uint ibID     = cdata.internalData[1];
     uint drawType = cdata.internalData[2];
-    
+
     VertexData vdata;
     [branch] if (drawType == DRAW_INDEXED) vdata = g_VertexBuffer[vbID + g_IndexBuffer[ibID + vertexID]];
     else     if (drawType == DRAW)         vdata = g_VertexBuffer[vbID + vertexID];

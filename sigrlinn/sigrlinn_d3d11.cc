@@ -271,7 +271,7 @@ struct DXSharedBuffer final
         }
     }
 
-    SGFX_FORCE_INLINE void createUAV(size_t numElements, bool isCounter)
+    SGFX_FORCE_INLINE void createUAV(size_t numElements, bool isCounter, bool isAppend)
     {
         D3D11_UNORDERED_ACCESS_VIEW_DESC uavDesc;
         std::memset(&uavDesc, 0, sizeof(uavDesc));
@@ -280,7 +280,10 @@ struct DXSharedBuffer final
         uavDesc.Buffer.NumElements = static_cast<UINT>(numElements);
 
         if (isCounter)
-            uavDesc.Buffer.Flags = D3D11_BUFFER_UAV_FLAG_COUNTER;
+            uavDesc.Buffer.Flags |= D3D11_BUFFER_UAV_FLAG_COUNTER;
+
+        if (isAppend)
+            uavDesc.Buffer.Flags |= D3D11_BUFFER_UAV_FLAG_APPEND;
 
         if (FAILED(g_pd3dDevice->CreateUnorderedAccessView(dataBuffer, &uavDesc, &dataUAV))) {
             // TODO: error handling
@@ -326,6 +329,12 @@ struct DXStateCache final
         std::memset(shaderResourceViews, 0, sizeof(shaderResourceViews));
         std::memset(shaderUAVs, 0, sizeof(shaderUAVs));
         std::memset(shaderUAVCounters, 0, sizeof(shaderUAVCounters));
+
+        if (vs) g_pImmediateContext->VSSetShaderResources(0, DrawCall::kMaxShaderResources, shaderResourceViews);
+        if (hs) g_pImmediateContext->HSSetShaderResources(0, DrawCall::kMaxShaderResources, shaderResourceViews);
+        if (ds) g_pImmediateContext->DSSetShaderResources(0, DrawCall::kMaxShaderResources, shaderResourceViews);
+        if (gs) g_pImmediateContext->GSSetShaderResources(0, DrawCall::kMaxShaderResources, shaderResourceViews);
+        if (ps) g_pImmediateContext->PSSetShaderResources(0, DrawCall::kMaxShaderResources, shaderResourceViews);
     }
 
     SGFX_FORCE_INLINE void setSamplerStates(const SamplerStateHandle* handles)
@@ -918,7 +927,7 @@ void setResourceRW(ComputeQueueHandle handle, uint32_t idx, BufferHandle resourc
 void submit(ComputeQueueHandle handle, uint32_t x, uint32_t y, uint32_t z)
 {
     if (handle != ComputeQueueHandle::invalidHandle()) {
-        ComputeQueue* queue   = static_cast<ComputeQueue*>(handle.value);
+        ComputeQueue*           queue   = static_cast<ComputeQueue*>(handle.value);
         ID3D11ComputeShader*    shader  = static_cast<ID3D11ComputeShader*>(queue->shader.value);
 
         // constant buffers are ID3D11Buffers effectively
@@ -955,6 +964,11 @@ void submit(ComputeQueueHandle handle, uint32_t x, uint32_t y, uint32_t z)
         // dispatch
         g_pImmediateContext->CSSetShader(shader, nullptr, 0);
         g_pImmediateContext->Dispatch(x, y, z);
+
+        // cleanup
+        ID3D11UnorderedAccessView*  clearUAVs[ComputeQueue::kMaxShaderResourcesRW]          = { nullptr };
+        uint32_t                    clearUAVCounters[ComputeQueue::kMaxShaderResourcesRW]   = { 0 };
+        g_pImmediateContext->CSSetUnorderedAccessViews(0, ComputeQueue::kMaxShaderResourcesRW, clearUAVs, clearUAVCounters);
     }
 }
 
@@ -1152,6 +1166,7 @@ BufferHandle createBuffer(uint32_t flags, const void* mem, size_t size, size_t s
     bool isStructured = false;
     bool isUAV        = false;
     bool isCounter    = false;
+    bool isAppend     = false;
 
     if (flags & BufferFlags::VertexBuffer) {
         bufferBindFlag = D3D11_BIND_VERTEX_BUFFER;
@@ -1174,6 +1189,9 @@ BufferHandle createBuffer(uint32_t flags, const void* mem, size_t size, size_t s
 
         if (flags & BufferFlags::GPUCounter)
             isCounter = true;
+
+        if (flags & BufferFlags::GPUAppend)
+            isAppend = true;
     }
     if (flags & BufferFlags::CPURead) {
         bufferUsage     = D3D11_USAGE_STAGING;
@@ -1208,7 +1226,7 @@ BufferHandle createBuffer(uint32_t flags, const void* mem, size_t size, size_t s
     buffer->dataBuffer = d3dbuffer;
 
     if (isStructured) buffer->createView(size / stride);
-    if (isUAV)        buffer->createUAV(size / stride, isCounter);
+    if (isUAV)        buffer->createUAV(size / stride, isCounter, isAppend);
 
     return BufferHandle(buffer);
 }

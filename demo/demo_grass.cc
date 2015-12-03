@@ -74,6 +74,12 @@ bool listFiles(std::string path, std::string mask, std::vector<std::string>& fil
     return true;
 }
 
+struct BoundingBox final
+{
+    glm::vec4 min;
+    glm::vec4 max;
+};
+
 struct LogicalMeshBuffer final
 {
     uint8_t* data             = nullptr;
@@ -167,21 +173,25 @@ struct GrassObject final
 {
     struct ConstantBuffer
     {
-        uint32_t dvpInternalData[4];
-        float    mvp[16];
+        uint32_t    internalData[4];
+        float       mvp[16];
+        float       boundingBoxMin[4];
+        float       boundingBoxMax[4];
     };
 
     enum
     {
         kConstantBufferSize = sizeof(ConstantBuffer)
     };
+    static_assert((kConstantBufferSize % 16) == 0, "Error: wrong buffer size");
 
-    glm::vec3 position;
+    glm::vec3           position;
+    BoundingBox         boundingBox;
 
-    LogicalMeshBuffer* vertexBuffer;
-    LogicalMeshBuffer* indexBuffer;
+    LogicalMeshBuffer*  vertexBuffer;
+    LogicalMeshBuffer*  indexBuffer;
 
-    uint32_t count;
+    uint32_t            count;
 
     GrassObject() {}
 
@@ -190,25 +200,48 @@ struct GrassObject final
         vertexBuffer = &data->vertexBuffer;
         indexBuffer  = &data->indexBuffer;
         count        = data->count;
+
+        buildBoundingBox();
     }
 
     ~GrassObject()
     {}
+
+    void buildBoundingBox()
+    {
+        glm::vec4 min = glm::vec4(0, 0, 0, 1);
+        glm::vec4 max = glm::vec4(0, 0, 0, 1);
+
+        MeshData::Vertex* vertices = reinterpret_cast<MeshData::Vertex*>(vertexBuffer->data);
+        for (size_t i = 0; i < (vertexBuffer->dataSize / vertexBuffer->dataFormatStride); ++i) {
+            min.x = std::min(min.x, vertices[i].position[0]);
+            min.y = std::min(min.y, vertices[i].position[1]);
+            min.z = std::min(min.z, vertices[i].position[2]);
+
+            max.x = std::max(max.x, vertices[i].position[0]);
+            max.y = std::max(max.y, vertices[i].position[1]);
+            max.z = std::max(max.z, vertices[i].position[2]);
+        }
+
+        boundingBox.min = min;
+        boundingBox.max = max;
+    }
 };
 
 struct DVPGrassManager final
 {
-    std::vector<MeshData*>    loadedMeshes;
-    std::vector<LogicalMesh*> logicalMeshes;
-    std::vector<GrassObject>  grassObjects;
-    PhysicalMeshBuffer        physicalVertexBuffer;
-    PhysicalMeshBuffer        physicalIndexBuffer;
+    std::vector<MeshData*>      loadedMeshes;
+    std::vector<LogicalMesh*>   logicalMeshes;
+    std::vector<GrassObject>    grassObjects;
+    PhysicalMeshBuffer          physicalVertexBuffer;
+    PhysicalMeshBuffer          physicalIndexBuffer;
 
-    sgfx::SamplerStateHandle samplerState;
-    sgfx::Texture2DHandle    grassTexture;
+    sgfx::SamplerStateHandle    samplerState;
+    sgfx::Texture2DHandle       grassTexture;
 
-    sgfx::BufferHandle sharedConstantBuffer;
-    uint32_t           numInstances = 0;
+    sgfx::BufferHandle          initialInstanceBuffer;
+    sgfx::BufferHandle          finalInstanceBuffer;
+    uint32_t                    numInstances = 0;
 
     enum
     {
@@ -241,7 +274,8 @@ struct DVPGrassManager final
         }
         sgfx::releaseSamplerState(samplerState);
         sgfx::releaseTexture(grassTexture);
-        sgfx::releaseBuffer(sharedConstantBuffer);
+        sgfx::releaseBuffer(initialInstanceBuffer);
+        sgfx::releaseBuffer(finalInstanceBuffer);
     }
 
     void loadTexture(const std::string& path)
@@ -289,7 +323,7 @@ struct DVPGrassManager final
         }
     }
 
-    void render(sgfx::DrawQueueHandle drawQueue, const glm::mat4& mvp)
+    void render(sgfx::DrawQueueHandle drawQueue, sgfx::ComputeQueueHandle computeQueue, const glm::mat4& mvp)
     {
         physicalVertexBuffer.rebuildPages();
         physicalIndexBuffer.rebuildPages();
@@ -297,9 +331,17 @@ struct DVPGrassManager final
         if (grassObjects.size() != numInstances) {
             numInstances = static_cast<uint32_t>(grassObjects.size());
 
-            sgfx::releaseBuffer(sharedConstantBuffer);
-            sharedConstantBuffer = sgfx::createBuffer(
+            sgfx::releaseBuffer(initialInstanceBuffer);
+            initialInstanceBuffer = sgfx::createBuffer(
                 sgfx::BufferFlags::CPUWrite | sgfx::BufferFlags::StructuredBuffer,
+                nullptr,
+                numInstances * GrassObject::kConstantBufferSize,
+                GrassObject::kConstantBufferSize
+            );
+
+            sgfx::releaseBuffer(finalInstanceBuffer);
+            finalInstanceBuffer = sgfx::createBuffer(
+                sgfx::BufferFlags::GPUWrite | sgfx::BufferFlags::GPUCounter | sgfx::BufferFlags::StructuredBuffer,
                 nullptr,
                 numInstances * GrassObject::kConstantBufferSize,
                 GrassObject::kConstantBufferSize
@@ -308,7 +350,7 @@ struct DVPGrassManager final
 
         // update constants
         uint32_t maxDrawCallCount = 0;
-        uint8_t* dataPtr = reinterpret_cast<uint8_t*>(sgfx::mapBuffer(sharedConstantBuffer, sgfx::MapType::Write));
+        uint8_t* dataPtr = reinterpret_cast<uint8_t*>(sgfx::mapBuffer(initialInstanceBuffer, sgfx::MapType::Write));
         if (dataPtr != nullptr) {
 
             for (size_t i = 0; i < numInstances; ++i) {
@@ -319,31 +361,45 @@ struct DVPGrassManager final
 
                 GrassObject::ConstantBuffer constants;
                 // fill internal data structure
-                constants.dvpInternalData[0] = obj.vertexBuffer->physicalAddress;
-                constants.dvpInternalData[1] = obj.indexBuffer->physicalAddress;
+                constants.internalData[0] = obj.vertexBuffer->physicalAddress;
+                constants.internalData[1] = obj.indexBuffer->physicalAddress;
 
-                constants.dvpInternalData[2] = 1; // draw indexed
-                constants.dvpInternalData[3] = obj.count;
+                constants.internalData[2] = 1; // draw indexed
+                constants.internalData[3] = obj.count;
+
                 // copy matrix
-                std::memcpy(constants.mvp, glm::value_ptr(matrix), sizeof(constants.mvp));
+                std::memcpy(constants.mvp,              glm::value_ptr(matrix),                 sizeof(constants.mvp));
+                std::memcpy(constants.boundingBoxMin,   glm::value_ptr(obj.boundingBox.min),    sizeof(constants.boundingBoxMin));
+                std::memcpy(constants.boundingBoxMax,   glm::value_ptr(obj.boundingBox.max),    sizeof(constants.boundingBoxMax));
 
                 std::memcpy(dataPtr + offset, &constants, GrassObject::kConstantBufferSize);
 
                 maxDrawCallCount = std::max(maxDrawCallCount, obj.count);
             }
 
-            sgfx::unmapBuffer(sharedConstantBuffer);
+            sgfx::unmapBuffer(initialInstanceBuffer);
         }
 
-        sgfx::setSamplerState(drawQueue, 0, samplerState);
+        // culling
+        {
+            sgfx::setResource(computeQueue, 0, initialInstanceBuffer);
+            sgfx::setResourceRW(computeQueue, 0, finalInstanceBuffer);
 
-        // draw calls
-        sgfx::setPrimitiveTopology(drawQueue, sgfx::PrimitiveTopology::TriangleList);
-        sgfx::setResource(drawQueue, 0, physicalVertexBuffer.physicalBuffer);
-        sgfx::setResource(drawQueue, 1, physicalIndexBuffer.physicalBuffer);
-        sgfx::setResource(drawQueue, 2, sharedConstantBuffer);
-        sgfx::setResource(drawQueue, 3, grassTexture);
-        sgfx::drawInstanced(drawQueue, numInstances, maxDrawCallCount, 0);
+            sgfx::submit(computeQueue, 128, 1, 1);
+        }
+
+        // rendering
+        sgfx::setSamplerState(drawQueue, 0, samplerState);
+        {
+            sgfx::setPrimitiveTopology(drawQueue, sgfx::PrimitiveTopology::TriangleList);
+            sgfx::setResource(drawQueue, 0, physicalVertexBuffer.physicalBuffer);
+            sgfx::setResource(drawQueue, 1, physicalIndexBuffer.physicalBuffer);
+            sgfx::setResource(drawQueue, 2, finalInstanceBuffer);
+            sgfx::setResource(drawQueue, 3, grassTexture);
+            sgfx::drawInstanced(drawQueue, numInstances, maxDrawCallCount, 0);
+
+            sgfx::submit(drawQueue);
+        }
     }
 };
 
@@ -361,6 +417,10 @@ public:
     sgfx::Texture2DHandle     colorBuffer;
     sgfx::Texture2DHandle     depthStencilBuffer;
     sgfx::RenderTargetHandle  renderTarget;
+
+    // CS culling
+    sgfx::ComputeShaderHandle instanceCullShader;
+    sgfx::ComputeQueueHandle  instanceCullQueue;
 
     DVPGrassManager*          grassManager;
 
@@ -457,6 +517,10 @@ public:
                 OutputDebugString("Failed to create pipeline state!");
             }
         }
+
+        // compute shaders
+        instanceCullShader  = loadCS("shaders/dvp_cull.hlsl");
+        instanceCullQueue   = sgfx::createComputeQueue(instanceCullShader);
     }
 
     virtual void releaseSampleData() override
@@ -467,6 +531,9 @@ public:
         sgfx::releaseSurfaceShader(ssHandle);
         sgfx::releasePipelineState(pipelineState);
         sgfx::releaseDrawQueue(drawQueue);
+
+        sgfx::releaseComputeShader(instanceCullShader);
+        sgfx::releaseComputeQueue(instanceCullQueue);
 
         sgfx::releaseRenderTarget(renderTarget);
         sgfx::releaseTexture(colorBuffer);
@@ -512,9 +579,7 @@ public:
             sgfx::setRenderTarget(renderTarget);
             sgfx::setViewport(width, height, 0.0F, 1.0F);
 
-            grassManager->render(drawQueue, mvp);
-
-            sgfx::submit(drawQueue);
+            grassManager->render(drawQueue, instanceCullQueue, mvp);
         }
         sgfx::present(1);
     }

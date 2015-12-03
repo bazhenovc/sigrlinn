@@ -87,7 +87,8 @@ enum : uint32_t {
     CPUWrite         = (1U << 4), // can be mapped to be written by the CPU
     GPUWrite         = (1U << 5), // can be written by the GPU
     GPUCounter       = (1U << 6), // can be written by the GPU with atomic counter usage
-    StreamOutput     = (1U << 7), // can be used as a stream output buffer
+    GPUAppend        = (1U << 7), // can be appended by the GPU
+    StreamOutput     = (1U << 8), // can be used as a stream output buffer
 };
 }
 
