@@ -44,7 +44,7 @@ bool Application::loadShader(const char* path, sgfx::ShaderCompileTarget target,
         std::memset(sourceCode, 0, size + 1);
         ifs.read(sourceCode, size);
 
-        return sgfx::compileShader(
+        auto ret = sgfx::compileShader(
             sourceCode,
             size,
             sgfx::ShaderCompileVersion::v5_0,
@@ -55,6 +55,10 @@ bool Application::loadShader(const char* path, sgfx::ShaderCompileTarget target,
             outData,
             outSize
         );
+
+        delete [] sourceCode;
+
+        return ret;
     }
     OutputDebugString("Failed to open file");
     return false;

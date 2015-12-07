@@ -477,8 +477,8 @@ struct RenderTargetImpl final
         for (size_t i = 0; i < RenderTargetSlot::Count; ++i) {
             if (renderTargetViews[i] != nullptr)
                 renderTargetViews[i]->Release();
-            //if (unorderedAccessViews[i] != nullptr)
-            //    unorderedAccessViews[i]->Release();
+            if (unorderedAccessViews[i] != nullptr)
+                unorderedAccessViews[i]->Release();
         }
         if (depthStencilView != nullptr)
             depthStencilView->Release();
