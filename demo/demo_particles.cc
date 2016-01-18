@@ -34,7 +34,7 @@ public:
 
     enum
     {
-        kMaxParticles   = 128 * 128,
+        kMaxParticles   = 500 * 1024,
         kBlockSize      = 128,
         kMaxOITPixels   = 8
     };
@@ -377,10 +377,10 @@ public:
         t = (dwTimeCur - dwTimeStart) / 1000.0f;
         dwTimeStart = dwTimeCur;
 
-        static glm::vec3 cameraPosition = glm::vec3(0.0F, 1.0F, -10);
-        cameraPosition.z += t * 2.0F;
+        static glm::vec3 cameraPosition = glm::vec3(0.0F, 0.3F, -3.0F);
+        //cameraPosition.z -= t * 0.5F;
 
-        glm::mat4 projection = glm::perspective(glm::pi<float>() / 2.0F, width / (FLOAT)height, 0.01f, 100.0f);
+        glm::mat4 projection = glm::perspective(glm::pi<float>() / 2.0F, width / (FLOAT)height, 0.001f, 100.0f);
         glm::mat4 view       = glm::lookAt(cameraPosition, cameraPosition + glm::vec3(0.0F, 0.0F, 1.0F), glm::vec3(0.0F, 1.0F, 0.0F));
         //glm::mat4 world      = glm::rotate(glm::mat4(1.0F), t, glm::vec3(0.0F, 1.0F, 0.0F));
 
@@ -409,7 +409,7 @@ public:
             sgfx::setResource(csQueue, 0, fallingParticles.bufferIn);
             sgfx::setResourceRW(csQueue, 0, fallingParticles.bufferOut);
             sgfx::setResourceRW(csQueue, 1, groundParticles.bufferOut);
-            sgfx::submit(csQueue, kBlockSize, 1, 1);
+            sgfx::submit(csQueue, kMaxParticles / kBlockSize, 1, 1);
         }
         sgfx::endPerfEvent();
 

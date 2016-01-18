@@ -89,6 +89,7 @@ enum : uint32_t {
     GPUCounter       = (1U << 6), // can be written by the GPU with atomic counter usage
     GPUAppend        = (1U << 7), // can be appended by the GPU
     StreamOutput     = (1U << 8), // can be used as a stream output buffer
+    IndirectArgs     = (1U << 9), // can be used as a drawIndirect args buffer
 };
 }
 
@@ -634,6 +635,9 @@ void                    drawIndexed(DrawQueueHandle dq, uint32_t count, uint32_t
 void                    drawInstanced(DrawQueueHandle dq, uint32_t instanceCount, uint32_t count, uint32_t startVertex);
 void                    drawIndexedInstanced(DrawQueueHandle dq, uint32_t instanceCount, uint32_t count, uint32_t startIndex, uint32_t startVertex);
 
+void                    drawInstancedIndirect(DrawQueueHandle dq, BufferHandle indirectArgs, size_t argsOffset);
+void                    drawIndexedInstancedIndirect(DrawQueueHandle dq, BufferHandle indirectArgs, size_t argsOffset);
+
 void                    submit(DrawQueueHandle handle);
 
 // performance markers
@@ -950,10 +954,13 @@ struct DrawCall final
 {
     enum Type : uint32_t
     {
-        Draw                 = 0,
-        DrawIndexed          = 1,
-        DrawInstanced        = 2,
-        DrawIndexedInstanced = 3
+        Draw                            = 0,
+        DrawIndexed                     = 1,
+        DrawInstanced                   = 2,
+        DrawIndexedInstanced            = 3,
+
+        DrawInstancedIndirect           = 4,
+        DrawIndexedInstancedIndirect    = 5
     };
 
     enum
@@ -967,6 +974,8 @@ struct DrawCall final
 
     BufferHandle      vertexBuffer;
     BufferHandle      indexBuffer;
+    BufferHandle      indirectArgsBuffer;
+    size_t            indirectArgsOffset;
     PrimitiveTopology primitiveTopology;
 
     uint32_t instanceCount;
@@ -1067,6 +1076,24 @@ public:
         currentDrawCall.startVertex   = startVertex;
         currentDrawCall.startIndex    = startIndex;
         currentDrawCall.type          = DrawCall::DrawIndexedInstanced;
+        drawCalls.Add(currentDrawCall);
+        std::memset(&currentDrawCall, 0, sizeof(currentDrawCall));
+    }
+
+    SGFX_FORCE_INLINE void drawInstancedIndirect(BufferHandle indirectArgs, size_t argsOffset)
+    {
+        currentDrawCall.type                = DrawCall::DrawInstancedIndirect;
+        currentDrawCall.indirectArgsBuffer  = indirectArgs;
+        currentDrawCall.indirectArgsOffset  = argsOffset;
+        drawCalls.Add(currentDrawCall);
+        std::memset(&currentDrawCall, 0, sizeof(currentDrawCall));
+    }
+
+    SGFX_FORCE_INLINE void drawIndexedInstancedIndirect(BufferHandle indirectArgs, size_t argsOffset)
+    {
+        currentDrawCall.type                = DrawCall::DrawIndexedInstancedIndirect;
+        currentDrawCall.indirectArgsBuffer  = indirectArgs;
+        currentDrawCall.indirectArgsOffset  = argsOffset;
         drawCalls.Add(currentDrawCall);
         std::memset(&currentDrawCall, 0, sizeof(currentDrawCall));
     }

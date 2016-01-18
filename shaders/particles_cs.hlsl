@@ -1,6 +1,6 @@
 
 #define kBlockSize    128
-#define kMaxParticles (128 * 128)
+#define kMaxParticles (500 * 1024)
 
 cbuffer ConstantBuffer: register(b0)
 {
@@ -36,6 +36,14 @@ float rand(inout uint seed, float start, float end)
     return start + seed * r;
 }
 
+float2 rand2(inout uint seed, float2 start, float2 end)
+{
+    return float2(
+        rand(seed, start.x, end.x),
+        rand(seed, start.y, end.y)
+    );
+}
+
 float3 rand3(inout uint seed, float3 start, float3 end)
 {
     return float3(
@@ -53,58 +61,49 @@ void cs_main(
     uint  groupIndex    : SV_GroupIndex
 )
 {
-    const float3 acceleration = float3(0, -0.1, 0);
+    const float3    acceleration = float3(0, -0.1, 0);
 
-    [loop] for (uint i = 0; i < kBlockSize; ++i) {
-        uint idx = i * kBlockSize + groupIndex;
+    const uint      numParticles        = kMaxParticles;
+    const uint      particlesPerGroup   = numParticles / kBlockSize;
+    const uint      particlesPerThread  = particlesPerGroup / kBlockSize;
+
+    const float3    boxSize             = float3(1, 1, 5);
+    const float3    halfBoxSize         = boxSize * 0.5;
+
+    [loop] for (uint i = 0; i < particlesPerThread; ++i) {
+        uint idx = i + particlesPerThread * groupIndex + particlesPerGroup * groupID;
 
         uint randomSeed = idx;
 
         ParticleData pdata = oldParticleBuffer[idx];
 
-        pdata.velocity.xyz += acceleration.xyz * 0.1;
+        pdata.velocity.xyz += acceleration.xyz * 0.0015 * pdata.velocity.w;
         pdata.position.xyz += pdata.velocity.xyz * 0.5;
-        pdata.velocity.w = length(pdata.velocity.xyz);
+        //pdata.velocity.w = length(pdata.velocity.xyz);
 
         pdata.params.x -= length(pdata.velocity.xyz) * 0.5 + 0.1;
-        pdata.params.y  = 0.3;
+        pdata.params.y  = 0.005;
         pdata.params.z  = 1.0;
 
         //[branch] if (pdata.params.x <= 0.0) {
         [branch] if (pdata.position.y <= 0.0) {
             ParticleData groundParticle = pdata;
             groundParticle.params.x = 1.0;
-            groundParticle.params.y = 1.6;
+            groundParticle.params.y = 0.005;
             groundParticle.params.z = 0.0;
+
+            groundParticle.position.y = 0.0;
 
             groundParticleBuffer[idx] = groundParticle;
 
-            pdata.position.xyz = cameraPosition + rand3(randomSeed, float3(-20, 20, -20), float3(50, 70, 50));
-            //pdata.velocity.xyz = rand3(randomSeed, float3(-2.0, -2.0, -2.0), float3(5.0, 5.0, 5.0));
+            pdata.position.xz  = rand2(randomSeed, float2(0.0, 0.0), boxSize.xz) - halfBoxSize.xz;
+            pdata.position.y   = rand(randomSeed, boxSize.y * 0.75, boxSize.y);
+
             pdata.velocity.xyz = float3(0.0, 0.0, 0.0);
+            pdata.velocity.w   = rand(randomSeed, 0.5, 1.0);
             pdata.params.x     = pdata.position.y * 10; //rand(randomSeed, 20.0, 50.0);
         }
 
         newParticleBuffer[idx] = pdata;
-
-#if 0
-        // sort particles
-        [loop] for (uint i = 0; i < kBlockSize; ++i) {
-            uint k = i * kBlockSize + groupIndex;
-
-            int j = k;
-            ParticleData t = groundParticleBuffer[k];
-
-            [loop] while (groundParticleBuffer[j - 1].position.z < t.position.z)  {
-                groundParticleBuffer[j] = groundParticleBuffer[j - 1];
-                j--;
-                if (j <= 0)
-                    break;
-            }
-
-            if (j != k)
-                groundParticleBuffer[j] = t;
-        }
-#endif
     }
 }

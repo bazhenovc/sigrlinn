@@ -1,6 +1,13 @@
 
 #define kBlockSize    128
 
+cbuffer cbDefault : register(b0)
+{
+    uint    numItems;
+    uint    maxDrawCallCount;
+    uint2   reserved;
+};
+
 struct ConstantData
 {
     uint4               internalData;
@@ -11,9 +18,7 @@ struct ConstantData
 
 StructuredBuffer<ConstantData>      initialBuffer   : register(t0);
 RWStructuredBuffer<ConstantData>    finalBuffer     : register(u0);
-RWStructuredBuffer<uint>            indirectBuffer  : register(u1);
-
-groupshared uint globalInstanceCounter;
+RWStructuredBuffer<uint4>           indirectBuffer  : register(u1);
 
 [numthreads(kBlockSize, 1, 1)]
 void cs_main(
@@ -23,20 +28,24 @@ void cs_main(
     uint  groupIndex    : SV_GroupIndex
 )
 {
-    uint localInstanceCounter = 0;
+    uint    itemsPerGroup           = numItems / kBlockSize;
+    uint    itemsPerThread          = itemsPerGroup / kBlockSize;
+    uint    itemCount               = 0;
 
-    [loop] for (uint i = 0; i < kBlockSize; ++i) {
-        uint idx = i * kBlockSize + groupIndex;
+    [loop] for (uint i = 0; i < itemsPerThread; ++i) {
+        uint idx = i + itemsPerThread * groupIndex + itemsPerGroup * groupID;
 
-        ConstantData data = initialBuffer[idx];
-
-        [branch] if ((idx % 3) == 0) {
-            finalBuffer[localInstanceCounter * kBlockSize + groupIndex] = data;
-            localInstanceCounter++;
+        //finalBuffer[idx] = initialBuffer[idx];
+        {
+            itemCount = finalBuffer.IncrementCounter();
+            finalBuffer[itemCount] = initialBuffer[itemCount];
         }
     }
 
-    InterlockedAdd(globalInstanceCounter, localInstanceCounter);
-
     GroupMemoryBarrierWithGroupSync();
+
+    // Write out indirect args
+    [branch] if (dispatchID.x == 0) {
+        indirectBuffer[0] = uint4(maxDrawCallCount, finalBuffer.IncrementCounter() - 1, 0, 0);
+    }
 }

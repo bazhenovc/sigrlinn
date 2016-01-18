@@ -245,6 +245,7 @@ ID3DUserDefinedAnnotation* g_debugAnnotation = nullptr;
 struct DXSharedBuffer final
 {
     ID3D11Resource*            dataBuffer       = nullptr;
+    ID3D11Buffer*              indirectBuffer   = nullptr;
     ID3D11ShaderResourceView*  dataView         = nullptr;
     ID3D11UnorderedAccessView* dataUAV          = 0;
     size_t                     dataBufferSize   = 0;
@@ -252,9 +253,25 @@ struct DXSharedBuffer final
     SGFX_FORCE_INLINE DXSharedBuffer() {}
     SGFX_FORCE_INLINE ~DXSharedBuffer()
     {
-        if (dataBuffer != nullptr) dataBuffer->Release();
-        if (dataView   != nullptr) dataView->Release();
-        if (dataUAV    != nullptr) dataUAV->Release();
+        if (dataBuffer != nullptr)      dataBuffer->Release();
+        if (indirectBuffer != nullptr)  indirectBuffer->Release();
+        if (dataView   != nullptr)      dataView->Release();
+        if (dataUAV    != nullptr)      dataUAV->Release();
+    }
+
+    SGFX_FORCE_INLINE void createIndirect(size_t stride)
+    {
+        D3D11_BUFFER_DESC bufferDesc;
+        bufferDesc.Usage                  = D3D11_USAGE_DEFAULT;
+        bufferDesc.StructureByteStride    = 0;
+        bufferDesc.ByteWidth              = stride;
+        bufferDesc.CPUAccessFlags         = 0;
+        bufferDesc.MiscFlags              = D3D11_RESOURCE_MISC_DRAWINDIRECT_ARGS;
+        bufferDesc.BindFlags              = 0;
+
+        if (FAILED(g_pd3dDevice->CreateBuffer(&bufferDesc, nullptr, &indirectBuffer))) {
+            // TODO: error handling
+        }
     }
 
     SGFX_FORCE_INLINE void createView(size_t numElements)
@@ -575,6 +592,27 @@ static void dxProcessDrawQueue(DrawQueue* queue)
         case DrawCall::DrawIndexed:          { g_pImmediateContext->DrawIndexed(call.count, call.startIndex, call.startVertex); } break;
         case DrawCall::DrawInstanced:        { g_pImmediateContext->DrawInstanced(call.count, call.instanceCount, call.startVertex, 0); } break;
         case DrawCall::DrawIndexedInstanced: { g_pImmediateContext->DrawIndexedInstanced(call.count, call.instanceCount, call.startIndex, call.startVertex, 0); } break;
+
+        case DrawCall::DrawInstancedIndirect: {
+
+            DXSharedBuffer* buffer = static_cast<DXSharedBuffer*>(call.indirectArgsBuffer.value);
+
+            // TODO: AppendConsumeBuffer support!
+            //g_pImmediateContext->CopyStructureCount(buffer->indirectBuffer, call.indirectArgsOffset, buffer->dataUAV);
+            g_pImmediateContext->CopyResource(buffer->indirectBuffer, buffer->dataBuffer);
+            g_pImmediateContext->DrawInstancedIndirect(buffer->indirectBuffer, call.indirectArgsOffset);
+        } break;
+
+        case DrawCall::DrawIndexedInstancedIndirect: {
+
+            DXSharedBuffer* buffer = static_cast<DXSharedBuffer*>(call.indirectArgsBuffer.value);
+
+            // TODO: AppendConsumeBuffer support!
+            //g_pImmediateContext->CopyStructureCount(buffer->indirectBuffer, call.indirectArgsOffset, buffer->dataUAV);
+            g_pImmediateContext->CopyResource(buffer->indirectBuffer, buffer->dataBuffer);
+            g_pImmediateContext->DrawIndexedInstancedIndirect(buffer->indirectBuffer, call.indirectArgsOffset);
+        } break;
+
         }
     }
 
@@ -582,7 +620,7 @@ static void dxProcessDrawQueue(DrawQueue* queue)
 }
 
 template <typename T, typename ...Args>
-static SGFX_FORCE_INLINE T* sgfx_new(Args&... args)
+static SGFX_FORCE_INLINE T* sgfx_new(Args&&... args)
 {
     return new (g_allocFunc(sizeof(T))) T(static_cast<Args&&>(args)...);
 }
@@ -1167,6 +1205,7 @@ BufferHandle createBuffer(uint32_t flags, const void* mem, size_t size, size_t s
     bool isUAV        = false;
     bool isCounter    = false;
     bool isAppend     = false;
+    bool isIndirect   = false;
 
     if (flags & BufferFlags::VertexBuffer) {
         bufferBindFlag = D3D11_BIND_VERTEX_BUFFER;
@@ -1202,6 +1241,10 @@ BufferHandle createBuffer(uint32_t flags, const void* mem, size_t size, size_t s
         bufferCPUFlags |= D3D11_CPU_ACCESS_WRITE;
     }
 
+    if (flags & BufferFlags::IndirectArgs) {
+        isIndirect      = true;
+    }
+
     D3D11_BUFFER_DESC bufferDesc;
     std::memset(&bufferDesc, 0, sizeof(bufferDesc));
 
@@ -1225,6 +1268,7 @@ BufferHandle createBuffer(uint32_t flags, const void* mem, size_t size, size_t s
     DXSharedBuffer* buffer = sgfx_new<DXSharedBuffer>();
     buffer->dataBuffer = d3dbuffer;
 
+    if (isIndirect)   buffer->createIndirect(stride);
     if (isStructured) buffer->createView(size / stride);
     if (isUAV)        buffer->createUAV(size / stride, isCounter, isAppend);
 
@@ -2086,6 +2130,22 @@ void drawIndexedInstanced(DrawQueueHandle handle, uint32_t instanceCount, uint32
     if (handle != DrawQueueHandle::invalidHandle()) {
         DrawQueue* queue = static_cast<DrawQueue*>(handle.value);
         queue->drawIndexedInstanced(instanceCount, count, startIndex, startVertex);
+    }
+}
+
+void drawInstancedIndirect(DrawQueueHandle handle, BufferHandle indirectArgs, size_t argsOffset)
+{
+    if (handle != DrawQueueHandle::invalidHandle()) {
+        DrawQueue* queue = static_cast<DrawQueue*>(handle.value);
+        queue->drawInstancedIndirect(indirectArgs, argsOffset);
+    }
+}
+
+void drawIndexedInstancedIndirect(DrawQueueHandle handle, BufferHandle indirectArgs, size_t argsOffset)
+{
+    if (handle != DrawQueueHandle::invalidHandle()) {
+        DrawQueue* queue = static_cast<DrawQueue*>(handle.value);
+        queue->drawIndexedInstancedIndirect(indirectArgs, argsOffset);
     }
 }
 

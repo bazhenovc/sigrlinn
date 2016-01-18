@@ -241,7 +241,16 @@ struct DVPGrassManager final
 
     sgfx::BufferHandle          initialInstanceBuffer;
     sgfx::BufferHandle          finalInstanceBuffer;
+    sgfx::BufferHandle          indirectArgsBuffer;
     uint32_t                    numInstances = 0;
+
+    struct CullCSConstantBuffer
+    {
+        uint32_t    numItems;
+        uint32_t    maxDrawCallCount;
+        uint32_t    reserved[2];
+    } cullCSConstantData;
+    sgfx::ConstantBufferHandle cullCSConstantBuffer;
 
     enum
     {
@@ -276,6 +285,8 @@ struct DVPGrassManager final
         sgfx::releaseTexture(grassTexture);
         sgfx::releaseBuffer(initialInstanceBuffer);
         sgfx::releaseBuffer(finalInstanceBuffer);
+        sgfx::releaseBuffer(indirectArgsBuffer);
+        sgfx::releaseConstantBuffer(cullCSConstantBuffer);
     }
 
     void loadTexture(const std::string& path)
@@ -341,11 +352,22 @@ struct DVPGrassManager final
 
             sgfx::releaseBuffer(finalInstanceBuffer);
             finalInstanceBuffer = sgfx::createBuffer(
-                sgfx::BufferFlags::GPUWrite | sgfx::BufferFlags::GPUCounter | sgfx::BufferFlags::StructuredBuffer,
+                sgfx::BufferFlags::GPUWrite | sgfx::BufferFlags::GPUCounter | sgfx::BufferFlags::StructuredBuffer | sgfx::BufferFlags::GPUCounter,
                 nullptr,
                 numInstances * GrassObject::kConstantBufferSize,
                 GrassObject::kConstantBufferSize
             );
+
+            sgfx::releaseBuffer(indirectArgsBuffer);
+            indirectArgsBuffer = sgfx::createBuffer(
+                sgfx::BufferFlags::GPUWrite | sgfx::BufferFlags::IndirectArgs,
+                nullptr,
+                4 * sizeof(uint32_t),
+                4 * sizeof(uint32_t)
+            );
+
+            sgfx::releaseConstantBuffer(cullCSConstantBuffer);
+            cullCSConstantBuffer = sgfx::createConstantBuffer(&cullCSConstantData, sizeof(CullCSConstantBuffer));
         }
 
         // update constants
@@ -380,12 +402,21 @@ struct DVPGrassManager final
             sgfx::unmapBuffer(initialInstanceBuffer);
         }
 
+        // update const buffer
+        {
+            cullCSConstantData.numItems         = numInstances;
+            cullCSConstantData.maxDrawCallCount = maxDrawCallCount;
+            sgfx::updateConstantBuffer(cullCSConstantBuffer, &cullCSConstantData);
+        }
+
         // culling
         {
+            sgfx::setConstantBuffer(computeQueue, 0, cullCSConstantBuffer);
             sgfx::setResource(computeQueue, 0, initialInstanceBuffer);
             sgfx::setResourceRW(computeQueue, 0, finalInstanceBuffer);
+            sgfx::setResourceRW(computeQueue, 1, indirectArgsBuffer);
 
-            sgfx::submit(computeQueue, 128, 1, 1);
+            sgfx::submit(computeQueue, numInstances / 128, 1, 1);
         }
 
         // rendering
@@ -396,9 +427,14 @@ struct DVPGrassManager final
             sgfx::setResource(drawQueue, 1, physicalIndexBuffer.physicalBuffer);
             sgfx::setResource(drawQueue, 2, finalInstanceBuffer);
             sgfx::setResource(drawQueue, 3, grassTexture);
-            sgfx::drawInstanced(drawQueue, numInstances, maxDrawCallCount, 0);
+            sgfx::drawInstancedIndirect(drawQueue, indirectArgsBuffer, 0);
 
             sgfx::submit(drawQueue);
+        }
+
+        // clear buffer counter
+        {
+            sgfx::clearBufferRW(finalInstanceBuffer, 0U);
         }
     }
 };
