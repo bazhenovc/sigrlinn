@@ -379,7 +379,7 @@ struct DVPGrassManager final
                 size_t offset = i * GrassObject::kConstantBufferSize;
                 const GrassObject& obj = grassObjects[i];
 
-                glm::mat4 matrix = mvp * glm::translate(obj.position);
+                glm::mat4 matrix = glm::transpose(mvp * glm::translate(obj.position));
 
                 GrassObject::ConstantBuffer constants;
                 // fill internal data structure
@@ -430,11 +430,6 @@ struct DVPGrassManager final
             sgfx::drawInstancedIndirect(drawQueue, indirectArgsBuffer, 0);
 
             sgfx::submit(drawQueue);
-        }
-
-        // clear buffer counter
-        {
-            sgfx::clearBufferRW(finalInstanceBuffer, 0U);
         }
     }
 };

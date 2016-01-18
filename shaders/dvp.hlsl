@@ -17,10 +17,10 @@ StructuredBuffer<uint>       g_IndexBuffer  : register(t1);
 #define DRAW_INDEXED 1
 struct ConstantData
 {
-    uint4               internalData;
-    row_major matrix    mvp;
-    float4              boundingBoxMin;
-    float4              boundingBoxMax;
+    uint4   internalData;
+    matrix  mvp;
+    float4  boundingBoxMin;
+    float4  boundingBoxMax;
 };
 StructuredBuffer<ConstantData> g_ConstantBuffer : register(t2);
 

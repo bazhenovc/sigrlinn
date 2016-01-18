@@ -10,10 +10,10 @@ cbuffer cbDefault : register(b0)
 
 struct ConstantData
 {
-    uint4               internalData;
-    row_major matrix    mvp;
-    float4              boundingBoxMin;
-    float4              boundingBoxMax;
+    uint4  internalData;
+    matrix mvp;
+    float4 boundingBoxMin;
+    float4 boundingBoxMax;
 };
 
 StructuredBuffer<ConstantData>      initialBuffer   : register(t0);
@@ -35,10 +35,11 @@ void cs_main(
     [loop] for (uint i = 0; i < itemsPerThread; ++i) {
         uint idx = i + itemsPerThread * groupIndex + itemsPerGroup * groupID;
 
-        //finalBuffer[idx] = initialBuffer[idx];
+        ConstantData cdata = initialBuffer[idx];
+
         {
             itemCount = finalBuffer.IncrementCounter();
-            finalBuffer[itemCount] = initialBuffer[itemCount];
+            finalBuffer[itemCount] = initialBuffer[idx];
         }
     }
 
