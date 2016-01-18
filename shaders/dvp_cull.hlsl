@@ -38,8 +38,8 @@ void cs_main(
         ConstantData cdata = initialBuffer[idx];
 
         {
-            itemCount = finalBuffer.IncrementCounter();
-            finalBuffer[itemCount] = initialBuffer[idx];
+            itemCount = indirectBuffer.IncrementCounter();
+            finalBuffer[itemCount] = initialBuffer[itemCount];
         }
     }
 
@@ -47,6 +47,6 @@ void cs_main(
 
     // Write out indirect args
     [branch] if (dispatchID.x == 0) {
-        indirectBuffer[0] = uint4(maxDrawCallCount, finalBuffer.IncrementCounter() - 1, 0, 0);
+        indirectBuffer[0] = uint4(maxDrawCallCount, indirectBuffer.IncrementCounter() - 1, 0, 0);
     }
 }

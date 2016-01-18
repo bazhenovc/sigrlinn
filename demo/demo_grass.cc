@@ -352,7 +352,7 @@ struct DVPGrassManager final
 
             sgfx::releaseBuffer(finalInstanceBuffer);
             finalInstanceBuffer = sgfx::createBuffer(
-                sgfx::BufferFlags::GPUWrite | sgfx::BufferFlags::GPUCounter | sgfx::BufferFlags::StructuredBuffer | sgfx::BufferFlags::GPUCounter,
+                sgfx::BufferFlags::GPUWrite | sgfx::BufferFlags::StructuredBuffer | sgfx::BufferFlags::GPUCounter,
                 nullptr,
                 numInstances * GrassObject::kConstantBufferSize,
                 GrassObject::kConstantBufferSize
@@ -360,7 +360,7 @@ struct DVPGrassManager final
 
             sgfx::releaseBuffer(indirectArgsBuffer);
             indirectArgsBuffer = sgfx::createBuffer(
-                sgfx::BufferFlags::GPUWrite | sgfx::BufferFlags::IndirectArgs,
+                sgfx::BufferFlags::GPUWrite | sgfx::BufferFlags::GPUCounter | sgfx::BufferFlags::IndirectArgs,
                 nullptr,
                 4 * sizeof(uint32_t),
                 4 * sizeof(uint32_t)
