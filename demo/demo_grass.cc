@@ -111,18 +111,12 @@ struct LogicalMesh final
 
 struct PhysicalMeshBuffer final
 {
-    sgfx::BufferHandle physicalBuffer;
+    util::BufferHandle physicalBuffer;
     size_t             physicalDataSize;
     bool               isDirty = false;
 
     typedef std::vector<LogicalMeshBuffer*> PageArray;
     PageArray allPages;
-
-    PhysicalMeshBuffer() = default;
-    inline ~PhysicalMeshBuffer()
-    {
-        sgfx::releaseBuffer(physicalBuffer);
-    }
 
     inline void allocate(LogicalMeshBuffer* logicalBuffer)
     {
@@ -174,9 +168,7 @@ struct GrassObject final
     struct ConstantBuffer
     {
         uint32_t    internalData[4];
-        float       mvp[16];
-        float       boundingBoxMin[4];
-        float       boundingBoxMax[4];
+        float       modelview[16];
     };
 
     enum
@@ -236,25 +228,34 @@ struct DVPGrassManager final
     PhysicalMeshBuffer          physicalVertexBuffer;
     PhysicalMeshBuffer          physicalIndexBuffer;
 
-    sgfx::SamplerStateHandle    samplerState;
-    sgfx::Texture2DHandle       grassTexture;
+    util::SamplerStateHandle    samplerState;
+    util::TextureHandle         grassTexture;
 
-    sgfx::BufferHandle          initialInstanceBuffer;
-    sgfx::BufferHandle          finalInstanceBuffer;
-    sgfx::BufferHandle          indirectArgsBuffer;
+    util::BufferHandle          initialInstanceBuffer;
+    util::BufferHandle          finalInstanceBuffer;
+    util::BufferHandle          occlusionDataBuffer;
+    util::BufferHandle          indirectArgsBuffer;
+    
     uint32_t                    numInstances = 0;
+    uint32_t                    maxDrawCallCount = 0;
 
     struct CullCSConstantBuffer
     {
-        uint32_t    numItems;
+        float       numItems;
         uint32_t    maxDrawCallCount;
         uint32_t    reserved[2];
     } cullCSConstantData;
-    sgfx::ConstantBufferHandle cullCSConstantBuffer;
+    util::ConstantBufferHandle cullCSConstantBuffer;
+
+    struct RenderConstantBuffer
+    {
+        float       viewProjection[16];
+    } renderConstantData;
+    util::ConstantBufferHandle renderConstantBuffer;
 
     enum
     {
-        kObjectSizeSquared = 64
+        kObjectSizeSquared = 128
     };
 
     DVPGrassManager()
@@ -281,17 +282,10 @@ struct DVPGrassManager final
         for (LogicalMesh* mesh: logicalMeshes) {
             delete mesh; // TODO: release
         }
-        sgfx::releaseSamplerState(samplerState);
-        sgfx::releaseTexture(grassTexture);
-        sgfx::releaseBuffer(initialInstanceBuffer);
-        sgfx::releaseBuffer(finalInstanceBuffer);
-        sgfx::releaseBuffer(indirectArgsBuffer);
-        sgfx::releaseConstantBuffer(cullCSConstantBuffer);
     }
 
     void loadTexture(const std::string& path)
     {
-        sgfx::releaseTexture(grassTexture);
         grassTexture = loadDDS(path);
     }
 
@@ -334,15 +328,15 @@ struct DVPGrassManager final
         }
     }
 
-    void render(sgfx::DrawQueueHandle drawQueue, sgfx::ComputeQueueHandle computeQueue, const glm::mat4& mvp)
+    void render(sgfx::DrawQueueHandle drawQueue, sgfx::DrawQueueHandle occlusionQueue, sgfx::ComputeQueueHandle computeQueue, const glm::mat4& mvp)
     {
         physicalVertexBuffer.rebuildPages();
         physicalIndexBuffer.rebuildPages();
 
+        // rebuild buffers if needed
         if (grassObjects.size() != numInstances) {
             numInstances = static_cast<uint32_t>(grassObjects.size());
 
-            sgfx::releaseBuffer(initialInstanceBuffer);
             initialInstanceBuffer = sgfx::createBuffer(
                 sgfx::BufferFlags::CPUWrite | sgfx::BufferFlags::StructuredBuffer,
                 nullptr,
@@ -350,7 +344,6 @@ struct DVPGrassManager final
                 GrassObject::kConstantBufferSize
             );
 
-            sgfx::releaseBuffer(finalInstanceBuffer);
             finalInstanceBuffer = sgfx::createBuffer(
                 sgfx::BufferFlags::GPUWrite | sgfx::BufferFlags::StructuredBuffer | sgfx::BufferFlags::GPUCounter,
                 nullptr,
@@ -358,7 +351,13 @@ struct DVPGrassManager final
                 GrassObject::kConstantBufferSize
             );
 
-            sgfx::releaseBuffer(indirectArgsBuffer);
+            occlusionDataBuffer = sgfx::createBuffer(
+                sgfx::BufferFlags::GPUWrite | sgfx::BufferFlags::StructuredBuffer,
+                nullptr,
+                numInstances * sizeof(uint32_t),
+                sizeof(uint32_t)
+            );
+
             indirectArgsBuffer = sgfx::createBuffer(
                 sgfx::BufferFlags::GPUWrite | sgfx::BufferFlags::GPUCounter | sgfx::BufferFlags::IndirectArgs,
                 nullptr,
@@ -366,70 +365,93 @@ struct DVPGrassManager final
                 4 * sizeof(uint32_t)
             );
 
-            sgfx::releaseConstantBuffer(cullCSConstantBuffer);
             cullCSConstantBuffer = sgfx::createConstantBuffer(&cullCSConstantData, sizeof(CullCSConstantBuffer));
-        }
+            renderConstantBuffer = sgfx::createConstantBuffer(&renderConstantData, sizeof(renderConstantData));
 
-        // update constants
-        uint32_t maxDrawCallCount = 0;
-        uint8_t* dataPtr = reinterpret_cast<uint8_t*>(sgfx::mapBuffer(initialInstanceBuffer, sgfx::MapType::Write));
-        if (dataPtr != nullptr) {
+            // update data
+            uint8_t* dataPtr = reinterpret_cast<uint8_t*>(sgfx::mapBuffer(initialInstanceBuffer, sgfx::MapType::Write));
+            if (dataPtr != nullptr) {
 
-            for (size_t i = 0; i < numInstances; ++i) {
-                size_t offset = i * GrassObject::kConstantBufferSize;
-                const GrassObject& obj = grassObjects[i];
+                for (size_t i = 0; i < numInstances; ++i) {
+                    size_t offset = i * GrassObject::kConstantBufferSize;
+                    const GrassObject& obj = grassObjects[i];
 
-                glm::mat4 matrix = glm::transpose(mvp * glm::translate(obj.position));
+                    glm::mat4 matrix = glm::translate(obj.position);
+                    matrix = glm::transpose(matrix);
 
-                GrassObject::ConstantBuffer constants;
-                // fill internal data structure
-                constants.internalData[0] = obj.vertexBuffer->physicalAddress;
-                constants.internalData[1] = obj.indexBuffer->physicalAddress;
+                    GrassObject::ConstantBuffer constants;
+                    // fill internal data structure
+                    constants.internalData[0] = obj.vertexBuffer->physicalAddress;
+                    constants.internalData[1] = obj.indexBuffer->physicalAddress;
 
-                constants.internalData[2] = 1; // draw indexed
-                constants.internalData[3] = obj.count;
+                    constants.internalData[2] = 1; // draw indexed
+                    constants.internalData[3] = obj.count;
 
-                // copy matrix
-                std::memcpy(constants.mvp,              glm::value_ptr(matrix),                 sizeof(constants.mvp));
-                std::memcpy(constants.boundingBoxMin,   glm::value_ptr(obj.boundingBox.min),    sizeof(constants.boundingBoxMin));
-                std::memcpy(constants.boundingBoxMax,   glm::value_ptr(obj.boundingBox.max),    sizeof(constants.boundingBoxMax));
+                    // copy matrix
+                    std::memcpy(constants.modelview, glm::value_ptr(matrix), sizeof(constants.modelview));
 
-                std::memcpy(dataPtr + offset, &constants, GrassObject::kConstantBufferSize);
+                    std::memcpy(dataPtr + offset, &constants, GrassObject::kConstantBufferSize);
 
-                maxDrawCallCount = std::max(maxDrawCallCount, obj.count);
+                    maxDrawCallCount = std::max(maxDrawCallCount, obj.count);
+                }
+
+                sgfx::unmapBuffer(initialInstanceBuffer);
             }
 
-            sgfx::unmapBuffer(initialInstanceBuffer);
-        }
-
-        // update const buffer
-        {
-            cullCSConstantData.numItems         = numInstances;
+            // update const buffer
+            cullCSConstantData.numItems         = static_cast<float>(numInstances);
             cullCSConstantData.maxDrawCallCount = maxDrawCallCount;
             sgfx::updateConstantBuffer(cullCSConstantBuffer, &cullCSConstantData);
         }
 
+        // update const buffer
+        {
+            std::memcpy(renderConstantData.viewProjection, glm::value_ptr(glm::transpose(mvp)), sizeof(renderConstantData.viewProjection));
+            sgfx::updateConstantBuffer(renderConstantBuffer, &renderConstantData);
+        }
+
         // culling
         {
+            sgfx::beginPerfEvent(L"OcclusionCull");
+
             sgfx::setConstantBuffer(computeQueue, 0, cullCSConstantBuffer);
             sgfx::setResource(computeQueue, 0, initialInstanceBuffer);
+            sgfx::setResource(computeQueue, 1, occlusionDataBuffer);
             sgfx::setResourceRW(computeQueue, 0, finalInstanceBuffer);
             sgfx::setResourceRW(computeQueue, 1, indirectArgsBuffer);
 
-            sgfx::submit(computeQueue, numInstances / 128, 1, 1);
+            //uint32_t groupCount = static_cast<uint32_t>(std::ceilf(numInstancesF / 128.0F));
+            sgfx::submit(computeQueue, 1, 1, 1);
+
+            sgfx::endPerfEvent();
         }
 
         // rendering
         sgfx::setSamplerState(drawQueue, 0, samplerState);
         {
             sgfx::setPrimitiveTopology(drawQueue, sgfx::PrimitiveTopology::TriangleList);
+            sgfx::setConstantBuffer(drawQueue, 0, renderConstantBuffer);
             sgfx::setResource(drawQueue, 0, physicalVertexBuffer.physicalBuffer);
             sgfx::setResource(drawQueue, 1, physicalIndexBuffer.physicalBuffer);
             sgfx::setResource(drawQueue, 2, finalInstanceBuffer);
             sgfx::setResource(drawQueue, 3, grassTexture);
             sgfx::drawInstancedIndirect(drawQueue, indirectArgsBuffer, 0);
 
-            sgfx::submit(drawQueue);
+            // queue submit is done later
+            //sgfx::submit(drawQueue);
+        }
+
+        // render occluders
+        {
+            sgfx::setPrimitiveTopology(occlusionQueue, sgfx::PrimitiveTopology::TriangleList);
+            sgfx::setConstantBuffer(occlusionQueue, 0, renderConstantBuffer);
+            sgfx::setResource(occlusionQueue, 0, physicalVertexBuffer.physicalBuffer);
+            sgfx::setResource(occlusionQueue, 1, physicalIndexBuffer.physicalBuffer);
+            sgfx::setResource(occlusionQueue, 2, initialInstanceBuffer);
+            sgfx::drawInstanced(occlusionQueue, numInstances, maxDrawCallCount, 0);
+
+            // queue submit is done later
+            //sgfx::submit(occlusionQueue);
         }
     }
 };
@@ -438,22 +460,33 @@ class GrassApplication : public Application
 {
 public:
 
-    sgfx::VertexShaderHandle  vsHandle;
-    sgfx::PixelShaderHandle   psHandle;
-    sgfx::SurfaceShaderHandle ssHandle;
+    // grass render
+    util::VertexShaderHandle    vsDrawHandle;
+    util::PixelShaderHandle     psDrawHandle;
+    util::SurfaceShaderHandle   ssDrawHandle;
 
-    sgfx::PipelineStateHandle pipelineState;
-    sgfx::DrawQueueHandle     drawQueue;
+    util::PipelineStateHandle   pipelineState;
+    util::DrawQueueHandle       drawQueue;
 
-    sgfx::Texture2DHandle     colorBuffer;
-    sgfx::Texture2DHandle     depthStencilBuffer;
-    sgfx::RenderTargetHandle  renderTarget;
+    util::TextureHandle         colorBuffer;
+    util::TextureHandle         depthStencilBuffer;
+    util::RenderTargetHandle    renderTarget;
+
+    // bounding box render
+    util::VertexShaderHandle    vsOcclusionHandle;
+    util::PixelShaderHandle     psOcclusionHandle;
+    util::SurfaceShaderHandle   ssOcclusionHandle;
+
+    util::PipelineStateHandle   occlusionPipelineState;
+
+    util::DrawQueueHandle       occlusionQueue;
+    util::RenderTargetHandle    occlusionRT;
 
     // CS culling
-    sgfx::ComputeShaderHandle instanceCullShader;
-    sgfx::ComputeQueueHandle  instanceCullQueue;
+    util::ComputeShaderHandle   instanceCullShader;
+    util::ComputeQueueHandle    instanceCullQueue;
 
-    DVPGrassManager*          grassManager;
+    DVPGrassManager*            grassManager;
 
 public:
 
@@ -472,6 +505,11 @@ public:
         // setup Sigrlinn
         sgfx::initD3D11(g_pd3dDevice, g_pImmediateContext, g_pSwapChain);
 
+        // mesh data
+        grassManager = new DVPGrassManager;
+        grassManager->loadDataSet("data/meshes/cattail/");
+        grassManager->loadTexture("data/textures/CattailBlades.dds");
+
         // create render target
         colorBuffer        = sgfx::getBackBuffer();
         depthStencilBuffer = sgfx::createTexture2D(
@@ -485,25 +523,43 @@ public:
 
         renderTarget = sgfx::createRenderTarget(renderTargetDesc);
 
-        // mesh data
-        grassManager = new DVPGrassManager;
-        grassManager->loadDataSet("data/meshes/cattail/");
-        grassManager->loadTexture("data/textures/CattailBlades.dds");
+        sgfx::RenderTargetDescriptor occlusionRTDesc;
+        occlusionRTDesc.numColorTextures        = 0;
+        occlusionRTDesc.depthStencilTexture     = depthStencilBuffer;
 
-        vsHandle = loadVS("shaders/dvp.hlsl");
-        psHandle = loadPS("shaders/dvp.hlsl");
+        occlusionRT = sgfx::createRenderTarget(occlusionRTDesc);
 
-        if (vsHandle != sgfx::VertexShaderHandle::invalidHandle() && psHandle != sgfx::PixelShaderHandle::invalidHandle()) {
-            ssHandle = sgfx::linkSurfaceShader(
-                vsHandle,
+        // create shaders
+        vsDrawHandle = loadVS("shaders/dvp.hlsl");
+        psDrawHandle = loadPS("shaders/dvp.hlsl");
+
+        if (vsDrawHandle.valid() && psDrawHandle.valid()) {
+            ssDrawHandle = sgfx::linkSurfaceShader(
+                vsDrawHandle,
                 sgfx::HullShaderHandle::invalidHandle(),
                 sgfx::DomainShaderHandle::invalidHandle(),
                 sgfx::GeometryShaderHandle::invalidHandle(),
-                psHandle
+                psDrawHandle
             );
         }
 
-        if (ssHandle != sgfx::SurfaceShaderHandle::invalidHandle()) {
+        Application::ShaderMacroVector occlusionMacros;
+        occlusionMacros.push_back({"OCCLUSION_RENDER", "1"});
+
+        vsOcclusionHandle = loadVS("shaders/dvp.hlsl", occlusionMacros);
+        psOcclusionHandle = loadPS("shaders/dvp.hlsl", occlusionMacros);
+
+        if (vsOcclusionHandle.valid() && psOcclusionHandle.valid()) {
+            ssOcclusionHandle = sgfx::linkSurfaceShader(
+                vsOcclusionHandle,
+                sgfx::HullShaderHandle::invalidHandle(),
+                sgfx::DomainShaderHandle::invalidHandle(),
+                sgfx::GeometryShaderHandle::invalidHandle(),
+                psOcclusionHandle
+            );
+        }
+
+        if (ssDrawHandle.valid() && ssOcclusionHandle.valid()) {
             sgfx::PipelineStateDescriptor desc;
 
             desc.rasterizerState.fillMode                           = sgfx::FillMode::Solid;
@@ -538,14 +594,27 @@ public:
             desc.depthStencilState.backFaceStencilDesc.depthFailOp  = sgfx::StencilOp::Keep;
             desc.depthStencilState.backFaceStencilDesc.passOp       = sgfx::StencilOp::Keep;
 
-            desc.shader       = ssHandle;
+            desc.shader       = ssDrawHandle;
             desc.vertexFormat = sgfx::VertexFormatHandle::invalidHandle();
 
             pipelineState = sgfx::createPipelineState(desc);
-            if (pipelineState != sgfx::PipelineStateHandle::invalidHandle()) {
+            if (pipelineState.valid()) {
                 drawQueue = sgfx::createDrawQueue(pipelineState);
             } else {
                 OutputDebugString("Failed to create pipeline state!");
+            }
+
+            // occlusion state
+            sgfx::PipelineStateDescriptor occlusionDesc = desc;
+            occlusionDesc.shader                        = ssOcclusionHandle;
+            occlusionDesc.depthStencilState.depthFunc   = sgfx::DepthFunc::LessEqual;
+            occlusionDesc.depthStencilState.writeMask   = sgfx::DepthWriteMask::Zero;
+
+            occlusionPipelineState = sgfx::createPipelineState(occlusionDesc);
+            if (occlusionPipelineState.valid()) {
+                occlusionQueue = sgfx::createDrawQueue(occlusionPipelineState);
+            } else {
+                OutputDebugString("Failed to create occlusion pipeline state!");
             }
         }
 
@@ -557,18 +626,6 @@ public:
     virtual void releaseSampleData() override
     {
         OutputDebugString("Cleanup\n");
-        sgfx::releaseVertexShader(vsHandle);
-        sgfx::releasePixelShader(psHandle);
-        sgfx::releaseSurfaceShader(ssHandle);
-        sgfx::releasePipelineState(pipelineState);
-        sgfx::releaseDrawQueue(drawQueue);
-
-        sgfx::releaseComputeShader(instanceCullShader);
-        sgfx::releaseComputeQueue(instanceCullQueue);
-
-        sgfx::releaseRenderTarget(renderTarget);
-        sgfx::releaseTexture(colorBuffer);
-        sgfx::releaseTexture(depthStencilBuffer);
 
         delete grassManager;
 
@@ -579,7 +636,7 @@ public:
     {
         // Update our time
         static float t = 0.0f;
-        static glm::vec3 cameraPosition = glm::vec3(0.0F, 4.0F, -200);
+        static glm::vec3 cameraPosition = glm::vec3(0.0F, 2.5F, -200);
 
         static ULONGLONG dwTimeStart = 0;
         ULONGLONG dwTimeCur = GetTickCount64();
@@ -605,13 +662,47 @@ public:
 
         // actually draw some stuff
         {
+            grassManager->render(drawQueue, occlusionQueue, instanceCullQueue, mvp);
+        }
+
+        // submit queues
+        {
+            // clear
             sgfx::clearRenderTarget(renderTarget, 0xFFFFFFF);
             sgfx::clearDepthStencil(renderTarget, 1.0F, 0);
-            sgfx::setRenderTarget(renderTarget);
-            sgfx::setViewport(width, height, 0.0F, 1.0F);
 
-            grassManager->render(drawQueue, instanceCullQueue, mvp);
+            // draw queue
+            {
+                sgfx::beginPerfEvent(L"Render");
+
+                sgfx::setRenderTarget(renderTarget);
+                sgfx::setViewport(width, height, 0.0F, 1.0F);
+
+                sgfx::submit(drawQueue);
+
+                sgfx::endPerfEvent();
+            }
+
+            // occlusion queue
+            {
+                sgfx::beginPerfEvent(L"OcclusionRender");
+
+                sgfx::clearBufferRW(grassManager->occlusionDataBuffer, 0U);
+                sgfx::setResourceRW(occlusionRT, 0, grassManager->occlusionDataBuffer);
+                sgfx::setRenderTarget(occlusionRT);
+                sgfx::setViewport(width, height, 0.0F, 1.0F);
+
+                sgfx::submit(occlusionQueue);
+
+                sgfx::endPerfEvent();
+            }
+
+            // TODO: remove redundant RT change
+            // this one is needed to reset RW resource bound to the render target output
+            sgfx::setResourceRW(occlusionRT, 0, sgfx::BufferHandle::invalidHandle());
+            sgfx::setRenderTarget(occlusionRT);
         }
+
         sgfx::present(1);
     }
 };

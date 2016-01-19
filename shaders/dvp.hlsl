@@ -1,3 +1,9 @@
+
+cbuffer cbDefault : register(b0)
+{
+    matrix viewProjection;
+};
+
 // vertex
 struct VertexData
 {
@@ -18,15 +24,18 @@ StructuredBuffer<uint>       g_IndexBuffer  : register(t1);
 struct ConstantData
 {
     uint4   internalData;
-    matrix  mvp;
-    float4  boundingBoxMin;
-    float4  boundingBoxMax;
+    matrix  modelview;
 };
 StructuredBuffer<ConstantData> g_ConstantBuffer : register(t2);
 
 // samplers and textures
-Texture2D    textureDiffuse : register(t3);
-SamplerState samplerLinear  : register(s0);
+
+#ifdef OCCLUSION_RENDER
+    RWStructuredBuffer<uint>    occlusionDataBuffer : register(u0);
+#else
+    Texture2D    textureDiffuse : register(t3);
+    SamplerState samplerLinear  : register(s0);
+#endif
 
 //=============================================================================
 struct VS_OUTPUT
@@ -38,6 +47,9 @@ struct VS_OUTPUT
     uint   boneIDs     : TEXCOORD3;
     float4 boneWeights : TEXCOORD4;
     uint   vertexColor : TEXCOORD5;
+
+    nointerpolation
+    uint   instanceID  : TEXCOORD6;
 };
 
 struct VS_INPUT
@@ -69,27 +81,35 @@ VS_OUTPUT vs_main(VS_INPUT input)
 
     VS_OUTPUT output = (VS_OUTPUT)0;
 
-    output.position = mul(v_position, cdata.mvp);
+    output.position = mul(v_position, cdata.modelview);
+    output.position = mul(output.position, viewProjection);
+
     output.texcoord0   = vdata.texcoord0;
     output.texcoord1   = vdata.texcoord1;
     output.normal      = vdata.normal;//mul(vdata.normal,   g_ConstantBuffer[instanceID].World);
     output.boneIDs     = vdata.boneIDs;
     output.boneWeights = vdata.boneWeights;
     output.vertexColor = vdata.vertexColor;
+    output.instanceID  = instanceID;
 
     return output;
 }
 
-float4 unpackVertexColor(int vcolor)
-{
-    return fmod(float4(vcolor / 262144.0, vcolor / 4096.0, vcolor / 64.0, vcolor), 64.0);
-}
+#ifdef OCCLUSION_RENDER
 
-float4 ps_main(VS_OUTPUT input) : SV_Target
-{
-    float4 color = textureDiffuse.Sample(samplerLinear, input.texcoord0);
-    clip(color.a < 0.1 ? -1 : 1);
-    return color;
-    //return float4(input.texcoord0, 0, 1);
-    //return unpackVertexColor(input.vertexColor);
-}
+    [earlydepthstencil]
+    void ps_main(VS_OUTPUT input)
+    {
+        occlusionDataBuffer[input.instanceID] = 1;
+    }
+
+#else
+
+    float4 ps_main(VS_OUTPUT input) : SV_Target
+    {
+        float4 color = textureDiffuse.Sample(samplerLinear, input.texcoord0);
+        clip(color.a < 0.1 ? -1 : 1);
+        return color;
+    }
+
+#endif

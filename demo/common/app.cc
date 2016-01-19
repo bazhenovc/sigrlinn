@@ -32,7 +32,7 @@ void Application::genericErrorReporter(const char* msg)
     OutputDebugString(msg);
 }
 
-bool Application::loadShader(const char* path, sgfx::ShaderCompileTarget target, void*& outData, size_t& outSize)
+bool Application::loadShader(const char* path, const Application::ShaderMacroVector& macros, sgfx::ShaderCompileTarget target, void*& outData, size_t& outSize)
 {
     std::ifstream ifs(path);
     if (ifs.is_open()) {
@@ -49,7 +49,7 @@ bool Application::loadShader(const char* path, sgfx::ShaderCompileTarget target,
             size,
             sgfx::ShaderCompileVersion::v5_0,
             target,
-            nullptr, 0,
+            macros.data(), macros.size(),
             0,
             Application::genericErrorReporter,
             outData,
@@ -64,12 +64,12 @@ bool Application::loadShader(const char* path, sgfx::ShaderCompileTarget target,
     return false;
 }
 
-sgfx::VertexShaderHandle Application::loadVS(const char* path)
+sgfx::VertexShaderHandle Application::loadVS(const char* path, const Application::ShaderMacroVector& macros)
 {
     void* bytecode      = nullptr;
     size_t bytecodeSize = 0;
 
-    if (loadShader(path, sgfx::ShaderCompileTarget::VS, bytecode, bytecodeSize)) {
+    if (loadShader(path, macros, sgfx::ShaderCompileTarget::VS, bytecode, bytecodeSize)) {
         sgfx::VertexShaderHandle vs = sgfx::createVertexShader(bytecode, bytecodeSize);
         OutputDebugString("Vertex shader compiled.\n");
         sgfx::deallocate(bytecode);
@@ -79,12 +79,12 @@ sgfx::VertexShaderHandle Application::loadVS(const char* path)
     return sgfx::VertexShaderHandle::invalidHandle();
 }
 
-sgfx::GeometryShaderHandle Application::loadGS(const char* path)
+sgfx::GeometryShaderHandle Application::loadGS(const char* path, const Application::ShaderMacroVector& macros)
 {
     void* bytecode      = nullptr;
     size_t bytecodeSize = 0;
 
-    if (loadShader(path, sgfx::ShaderCompileTarget::GS, bytecode, bytecodeSize)) {
+    if (loadShader(path, macros, sgfx::ShaderCompileTarget::GS, bytecode, bytecodeSize)) {
         sgfx::GeometryShaderHandle ret = sgfx::createGeometryShader(bytecode, bytecodeSize);
         OutputDebugString("Geometry shader compiled.\n");
         sgfx::deallocate(bytecode);
@@ -94,12 +94,12 @@ sgfx::GeometryShaderHandle Application::loadGS(const char* path)
     return sgfx::GeometryShaderHandle::invalidHandle();
 }
 
-sgfx::PixelShaderHandle Application::loadPS(const char* path)
+sgfx::PixelShaderHandle Application::loadPS(const char* path, const Application::ShaderMacroVector& macros)
 {
     void* bytecode      = nullptr;
     size_t bytecodeSize = 0;
 
-    if (loadShader(path, sgfx::ShaderCompileTarget::PS, bytecode, bytecodeSize)) {
+    if (loadShader(path, macros, sgfx::ShaderCompileTarget::PS, bytecode, bytecodeSize)) {
         sgfx::PixelShaderHandle ret = sgfx::createPixelShader(bytecode, bytecodeSize);
         OutputDebugString("Pixel shader compiled.\n");
         sgfx::deallocate(bytecode);
@@ -109,12 +109,12 @@ sgfx::PixelShaderHandle Application::loadPS(const char* path)
     return sgfx::PixelShaderHandle::invalidHandle();
 }
 
-sgfx::ComputeShaderHandle Application::loadCS(const char* path)
+sgfx::ComputeShaderHandle Application::loadCS(const char* path, const Application::ShaderMacroVector& macros)
 {
     void* bytecode      = nullptr;
     size_t bytecodeSize = 0;
 
-    if (loadShader(path, sgfx::ShaderCompileTarget::CS, bytecode, bytecodeSize)) {
+    if (loadShader(path, macros , sgfx::ShaderCompileTarget::CS, bytecode, bytecodeSize)) {
         sgfx::ComputeShaderHandle ret = sgfx::createComputeShader(bytecode, bytecodeSize);
         OutputDebugString("Compute shader compiled.\n");
         sgfx::deallocate(bytecode);
@@ -131,7 +131,7 @@ sgfx::VertexFormatHandle Application::loadVF(sgfx::VertexElementDescriptor* vfEl
 
     sgfx::VertexFormatHandle ret = sgfx::VertexFormatHandle::invalidHandle();
 
-    if (loadShader(shaderPath, sgfx::ShaderCompileTarget::VS, bytecode, bytecodeSize)) {
+    if (loadShader(shaderPath, ShaderMacroVector(), sgfx::ShaderCompileTarget::VS, bytecode, bytecodeSize)) {
         ret = sgfx::createVertexFormat(
             vfElements, vfElementsSize,
             bytecode, bytecodeSize,

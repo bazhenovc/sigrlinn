@@ -26,6 +26,8 @@
 
 #include <stdint.h>
 
+#include <vector>
+
 #define APP_WIN32
 
 #ifdef APP_WIN32
@@ -34,59 +36,69 @@
 #include <d3d11.h>
 #endif
 
-namespace GfxUtils
+namespace util
 {
-    inline void Release(sgfx::VertexShaderHandle obj)   { sgfx::releaseVertexShader(obj); }
-    inline void Release(sgfx::HullShaderHandle obj)     { sgfx::releaseHullShader(obj); }
-    inline void Release(sgfx::DomainShaderHandle obj)   { sgfx::releaseDomainShader(obj); }
-    inline void Release(sgfx::GeometryShaderHandle obj) { sgfx::releaseGeometryShader(obj); }
-    inline void Release(sgfx::PixelShaderHandle obj)    { sgfx::releasePixelShader(obj); }
-    inline void Release(sgfx::SurfaceShaderHandle obj)  { sgfx::releaseSurfaceShader(obj); }
-    inline void Release(sgfx::PipelineStateHandle obj)  { sgfx::releasePipelineState(obj); }
-    inline void Release(sgfx::BufferHandle obj)         { sgfx::releaseBuffer(obj); }
-    inline void Release(sgfx::ConstantBufferHandle obj) { sgfx::releaseConstantBuffer(obj); }
-    inline void Release(sgfx::SamplerStateHandle obj)   { sgfx::releaseSamplerState(obj); }
-    inline void Release(sgfx::TextureHandle obj)        { sgfx::releaseTexture(obj); }
-    inline void Release(sgfx::RenderTargetHandle obj)   { sgfx::releaseRenderTarget(obj); }
-    inline void Release(sgfx::DrawQueueHandle obj)      { sgfx::releaseDrawQueue(obj); }
-    inline void Release(sgfx::VertexFormatHandle obj)   { sgfx::releaseVertexFormat(obj); }
+    inline void releaseHandle(sgfx::VertexShaderHandle obj)   { sgfx::releaseVertexShader(obj); }
+    inline void releaseHandle(sgfx::HullShaderHandle obj)     { sgfx::releaseHullShader(obj); }
+    inline void releaseHandle(sgfx::DomainShaderHandle obj)   { sgfx::releaseDomainShader(obj); }
+    inline void releaseHandle(sgfx::GeometryShaderHandle obj) { sgfx::releaseGeometryShader(obj); }
+    inline void releaseHandle(sgfx::PixelShaderHandle obj)    { sgfx::releasePixelShader(obj); }
+    inline void releaseHandle(sgfx::SurfaceShaderHandle obj)  { sgfx::releaseSurfaceShader(obj); }
+    inline void releaseHandle(sgfx::PipelineStateHandle obj)  { sgfx::releasePipelineState(obj); }
+    inline void releaseHandle(sgfx::BufferHandle obj)         { sgfx::releaseBuffer(obj); }
+    inline void releaseHandle(sgfx::ConstantBufferHandle obj) { sgfx::releaseConstantBuffer(obj); }
+    inline void releaseHandle(sgfx::SamplerStateHandle obj)   { sgfx::releaseSamplerState(obj); }
+    inline void releaseHandle(sgfx::TextureHandle obj)        { sgfx::releaseTexture(obj); }
+    inline void releaseHandle(sgfx::RenderTargetHandle obj)   { sgfx::releaseRenderTarget(obj); }
+    inline void releaseHandle(sgfx::DrawQueueHandle obj)      { sgfx::releaseDrawQueue(obj); }
+    inline void releaseHandle(sgfx::ComputeQueueHandle obj)   { sgfx::releaseComputeQueue(obj); }
+    inline void releaseHandle(sgfx::ComputeShaderHandle obj)  { sgfx::releaseComputeShader(obj); }
+    inline void releaseHandle(sgfx::VertexFormatHandle obj)   { sgfx::releaseVertexFormat(obj); }
+
+    ///////////////////////////////////////////////////////////////////////
+    // Graphics object handle
+    //
+    // RAII style object for sgfx handles
+
+    template <typename T>
+    struct GraphicsObjectHandle final
+    {
+    private:
+        T gfxObject;
+
+    public:
+        inline          GraphicsObjectHandle()                                      {}
+        inline explicit GraphicsObjectHandle(T newObject) : gfxObject(newObject)    {}
+        inline          GraphicsObjectHandle(const GraphicsObjectHandle& other) = delete;
+        inline          ~GraphicsObjectHandle()                                     { releaseHandle(gfxObject); }
+
+        inline GraphicsObjectHandle& operator=(T newObject)                         { releaseHandle(gfxObject); gfxObject = newObject; return *this; }
+        inline GraphicsObjectHandle& operator=(const GraphicsObjectHandle& other) = delete;
+
+        inline operator T()                                                         { return gfxObject; }
+        inline operator const T() const                                             { return gfxObject; }
+
+        inline bool valid() const                                                   { return gfxObject.value != 0; }
+    };
+
+    // useful typedefs
+    typedef GraphicsObjectHandle<sgfx::VertexShaderHandle>   VertexShaderHandle;
+    typedef GraphicsObjectHandle<sgfx::HullShaderHandle>     HullShaderHandle;
+    typedef GraphicsObjectHandle<sgfx::DomainShaderHandle>   DomainShaderHandle;
+    typedef GraphicsObjectHandle<sgfx::GeometryShaderHandle> GeometryShaderHandle;
+    typedef GraphicsObjectHandle<sgfx::PixelShaderHandle>    PixelShaderHandle;
+    typedef GraphicsObjectHandle<sgfx::SurfaceShaderHandle>  SurfaceShaderHandle;
+    typedef GraphicsObjectHandle<sgfx::PipelineStateHandle>  PipelineStateHandle;
+    typedef GraphicsObjectHandle<sgfx::BufferHandle>         BufferHandle;
+    typedef GraphicsObjectHandle<sgfx::ConstantBufferHandle> ConstantBufferHandle;
+    typedef GraphicsObjectHandle<sgfx::SamplerStateHandle>   SamplerStateHandle;
+    typedef GraphicsObjectHandle<sgfx::TextureHandle>        TextureHandle;
+    typedef GraphicsObjectHandle<sgfx::RenderTargetHandle>   RenderTargetHandle;
+    typedef GraphicsObjectHandle<sgfx::DrawQueueHandle>      DrawQueueHandle;
+    typedef GraphicsObjectHandle<sgfx::ComputeQueueHandle>   ComputeQueueHandle;
+    typedef GraphicsObjectHandle<sgfx::ComputeShaderHandle>  ComputeShaderHandle;
+    typedef GraphicsObjectHandle<sgfx::VertexFormatHandle>   VertexFormatHandle;
 }
-
-template <typename T>
-struct iGfxObject final
-{
-private:
-    T gfxObject;
-
-public:
-    inline          iGfxObject()                        {}
-    inline explicit iGfxObject(T newObject) : gfxObject(newObject) {}
-    inline          iGfxObject(const iGfxObject& other) = delete;
-    inline          ~iGfxObject()                       { GfxUtils::Release(gfxObject); }
-
-    inline iGfxObject& operator=(T newObject)             { GfxUtils::Release(gfxObject); gfxObject = newObject; return *this; }
-    inline iGfxObject& operator=(const iGfxObject& other) = delete;
-
-    inline operator T()             { return gfxObject; }
-    inline operator const T() const { return gfxObject; }
-
-    inline bool valid() const { return gfxObject.value != 0; }
-};
-
-typedef iGfxObject<sgfx::VertexShaderHandle>   iGfxVertexShader;
-typedef iGfxObject<sgfx::HullShaderHandle>     iGfxHullShader;
-typedef iGfxObject<sgfx::DomainShaderHandle>   iGfxDomainShader;
-typedef iGfxObject<sgfx::GeometryShaderHandle> iGfxGeometryShader;
-typedef iGfxObject<sgfx::PixelShaderHandle>    iGfxPixelShader;
-typedef iGfxObject<sgfx::SurfaceShaderHandle>  iGfxSurfaceShader;
-typedef iGfxObject<sgfx::PipelineStateHandle>  iGfxPipelineState;
-typedef iGfxObject<sgfx::BufferHandle>         iGfxBuffer;
-typedef iGfxObject<sgfx::ConstantBufferHandle> iGfxConstantBuffer;
-typedef iGfxObject<sgfx::SamplerStateHandle>   iGfxSamplerState;
-typedef iGfxObject<sgfx::TextureHandle>        iGfxTexture;
-typedef iGfxObject<sgfx::RenderTargetHandle>   iGfxRenderTarget;
-typedef iGfxObject<sgfx::DrawQueueHandle>      iGfxDrawQueue;
-typedef iGfxObject<sgfx::VertexFormatHandle>   iGfxVertexFormat;
 
 class Application
 {
@@ -108,11 +120,14 @@ protected:
     static void genericErrorReporter(const char* msg);
 
 public:
-    bool loadShader(const char* path, sgfx::ShaderCompileTarget target, void*& outData, size_t& outSize);
-    sgfx::VertexShaderHandle   loadVS(const char* path);
-    sgfx::GeometryShaderHandle loadGS(const char* path);
-    sgfx::PixelShaderHandle    loadPS(const char* path);
-    sgfx::ComputeShaderHandle  loadCS(const char* path);
+
+    typedef std::vector<sgfx::ShaderCompileMacro> ShaderMacroVector;
+
+    bool loadShader(const char* path, const ShaderMacroVector& macros, sgfx::ShaderCompileTarget target, void*& outData, size_t& outSize);
+    sgfx::VertexShaderHandle   loadVS(const char* path, const ShaderMacroVector& macros = ShaderMacroVector());
+    sgfx::GeometryShaderHandle loadGS(const char* path, const ShaderMacroVector& macros = ShaderMacroVector());
+    sgfx::PixelShaderHandle    loadPS(const char* path, const ShaderMacroVector& macros = ShaderMacroVector());
+    sgfx::ComputeShaderHandle  loadCS(const char* path, const ShaderMacroVector& macros = ShaderMacroVector());
 
     sgfx::VertexFormatHandle   loadVF(sgfx::VertexElementDescriptor* vfElements, size_t vfElementsSize, const char* shaderPath);
 

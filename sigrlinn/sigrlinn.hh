@@ -489,14 +489,14 @@ enum : uint64_t {
 }
 
 bool compileShader(
-    const char*          sourceCode,
-    size_t               sourceCodeSize,
-    ShaderCompileVersion version,
-    ShaderCompileTarget  target,
-    ShaderCompileMacro*  macros,
-    size_t               macrosSize,
-    uint64_t             flags,
-    ErrorReportFunc      errorFunc,
+    const char*                 sourceCode,
+    size_t                      sourceCodeSize,
+    ShaderCompileVersion        version,
+    ShaderCompileTarget         target,
+    const ShaderCompileMacro*   macros,
+    size_t                      macrosSize,
+    uint64_t                    flags,
+    ErrorReportFunc             errorFunc,
 
     void*&  outData, // use deallocate() to dispose this
     size_t& outDataSize

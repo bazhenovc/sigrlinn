@@ -709,14 +709,14 @@ uint64_t getGPUCaps()
 
 //-------------------------------------------------------------------------------------------------
 bool compileShader(
-    const char*          sourceCode,
-    size_t               sourceCodeSize,
-    ShaderCompileVersion version,
-    ShaderCompileTarget  target,
-    ShaderCompileMacro*  macros,
-    size_t               macrosSize,
-    uint64_t             flags,
-    ErrorReportFunc      errorReport,
+    const char*                 sourceCode,
+    size_t                      sourceCodeSize,
+    ShaderCompileVersion        version,
+    ShaderCompileTarget         target,
+    const ShaderCompileMacro*   macros,
+    size_t                      macrosSize,
+    uint64_t                    flags,
+    ErrorReportFunc             errorReport,
 
     void*&  outData,
     size_t& outDataSize
@@ -1004,6 +1004,9 @@ void submit(ComputeQueueHandle handle, uint32_t x, uint32_t y, uint32_t z)
         g_pImmediateContext->Dispatch(x, y, z);
 
         // cleanup
+        ID3D11ShaderResourceView*   clearSRVs[ComputeQueue::kMaxShaderResources]            = { nullptr };
+        g_pImmediateContext->CSSetShaderResources(0, ComputeQueue::kMaxShaderResources, clearSRVs);
+
         ID3D11UnorderedAccessView*  clearUAVs[ComputeQueue::kMaxShaderResourcesRW]          = { nullptr };
         uint32_t                    clearUAVCounters[ComputeQueue::kMaxShaderResourcesRW]   = { 0 };
         g_pImmediateContext->CSSetUnorderedAccessViews(0, ComputeQueue::kMaxShaderResourcesRW, clearUAVs, clearUAVCounters);

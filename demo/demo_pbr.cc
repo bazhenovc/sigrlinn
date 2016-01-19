@@ -32,8 +32,8 @@ class Mesh
 {
 private:
 
-    iGfxBuffer vertexBuffer;
-    iGfxBuffer indexBuffer;
+    util::BufferHandle vertexBuffer;
+    util::BufferHandle indexBuffer;
     uint32_t   numIndices;
 
 public:
@@ -69,10 +69,10 @@ public:
 
 struct Material
 {
-    iGfxTexture albedo;
-    iGfxTexture gloss;
-    iGfxTexture normal;
-    iGfxTexture spec;
+    util::TextureHandle albedo;
+    util::TextureHandle gloss;
+    util::TextureHandle normal;
+    util::TextureHandle spec;
 
     inline Material()  {}
     inline ~Material() {}
@@ -90,34 +90,34 @@ private:
     Mesh     akMesh;     // our AK mesh
     Material akMaterial; // mesh material
 
-    iGfxSamplerState samplerState;
-    iGfxVertexFormat vertexFormat;
+    util::SamplerStateHandle samplerState;
+    util::VertexFormatHandle vertexFormat;
 
     // constant buffer
-    iGfxConstantBuffer constantBuffer;
+    util::ConstantBufferHandle constantBuffer;
 
     // gbuffer pass data
-    iGfxVertexShader  vertexShaderGB;
-    iGfxPixelShader   pixelShaderGB;
-    iGfxSurfaceShader surfaceShaderGB;
-    iGfxPipelineState pipelineStateGB;
-    iGfxDrawQueue     drawQueueGB;
+    util::VertexShaderHandle  vertexShaderGB;
+    util::PixelShaderHandle   pixelShaderGB;
+    util::SurfaceShaderHandle surfaceShaderGB;
+    util::PipelineStateHandle pipelineStateGB;
+    util::DrawQueueHandle     drawQueueGB;
 
     // gbuffer
-    iGfxTexture      rtColorBuffer0GB;
-    iGfxTexture      rtColorBuffer1GB;
-    iGfxTexture      rtDepthBufferGB;
-    iGfxRenderTarget renderTargetGB;
+    util::TextureHandle      rtColorBuffer0GB;
+    util::TextureHandle      rtColorBuffer1GB;
+    util::TextureHandle      rtDepthBufferGB;
+    util::RenderTargetHandle renderTargetGB;
 
     // deferred resolve data
-    iGfxVertexShader  vertexShaderDS;
-    iGfxPixelShader   pixelShaderDS;
-    iGfxSurfaceShader surfaceShaderDS;
-    iGfxPipelineState pipelineStateDS;
-    iGfxDrawQueue     drawQueueDS;
+    util::VertexShaderHandle  vertexShaderDS;
+    util::PixelShaderHandle   pixelShaderDS;
+    util::SurfaceShaderHandle surfaceShaderDS;
+    util::PipelineStateHandle pipelineStateDS;
+    util::DrawQueueHandle     drawQueueDS;
 
-    iGfxTexture      rtBackBufferDS;
-    iGfxRenderTarget renderTargetDS;
+    util::TextureHandle      rtBackBufferDS;
+    util::RenderTargetHandle renderTargetDS;
 
 public:
 
