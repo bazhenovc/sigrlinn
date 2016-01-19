@@ -374,7 +374,7 @@ public:
             sgfx::setConstantBuffer(drawQueue, 0, constantBuffer);
             sgfx::setVertexBuffer(drawQueue, modelVertexBuffer);
             sgfx::setIndexBuffer(drawQueue, modelIndexBuffer);
-            sgfx::drawIndexed(drawQueue, meshData.getIndices().size(), 0, 0);
+            sgfx::drawIndexed(drawQueue, static_cast<uint32_t>(meshData.getIndices().size()), 0, 0);
 
             sgfx::submit(drawQueue);
         }

@@ -264,7 +264,7 @@ struct DXSharedBuffer final
         D3D11_BUFFER_DESC bufferDesc;
         bufferDesc.Usage                  = D3D11_USAGE_DEFAULT;
         bufferDesc.StructureByteStride    = 0;
-        bufferDesc.ByteWidth              = stride;
+        bufferDesc.ByteWidth              = static_cast<UINT>(stride);
         bufferDesc.CPUAccessFlags         = 0;
         bufferDesc.MiscFlags              = D3D11_RESOURCE_MISC_DRAWINDIRECT_ARGS;
         bufferDesc.BindFlags              = 0;
@@ -356,7 +356,7 @@ struct DXStateCache final
 
     SGFX_FORCE_INLINE void setSamplerStates(const SamplerStateHandle* handles)
     {
-        for (size_t i = 0; i < DrawQueue::kMaxSamplerStates; ++i) {
+        for (UINT i = 0; i < DrawQueue::kMaxSamplerStates; ++i) {
             ID3D11SamplerState* state = static_cast<ID3D11SamplerState*>(handles[i].value);
             if (state != samplerStates[i]) {
                 samplerStates[i] = state;
@@ -377,7 +377,7 @@ struct DXStateCache final
 
     SGFX_FORCE_INLINE void setConstantBuffers(const ConstantBufferHandle* handles)
     {
-        for (size_t i = 0; i < DrawCall::kMaxConstantBuffers; ++i) {
+        for (UINT i = 0; i < DrawCall::kMaxConstantBuffers; ++i) {
             ID3D11Buffer* state = static_cast<ID3D11Buffer*>(handles[i].value);
             if (state != constantBuffers[i]) {
                 constantBuffers[i] = state;
@@ -398,7 +398,7 @@ struct DXStateCache final
 
     SGFX_FORCE_INLINE void setShaderResources(const ShaderResource* resources)
     {
-        for (size_t i = 0; i < DrawCall::kMaxShaderResources; ++i) {
+        for (UINT i = 0; i < DrawCall::kMaxShaderResources; ++i) {
             DXSharedBuffer* buffer = static_cast<DXSharedBuffer*>(resources[i].value);
 
             ID3D11ShaderResourceView* state = nullptr;
@@ -424,7 +424,7 @@ struct DXStateCache final
 
     SGFX_FORCE_INLINE void setShaderResourcesRW(const ShaderResource* resources)
     {
-        for (size_t i = 0; i < ComputeQueue::kMaxShaderResourcesRW; ++i) {
+        for (UINT i = 0; i < ComputeQueue::kMaxShaderResourcesRW; ++i) {
             DXSharedBuffer* buffer = static_cast<DXSharedBuffer*>(resources[i].value);
 
             ID3D11UnorderedAccessView* state = nullptr;
@@ -440,7 +440,6 @@ struct DXStateCache final
         }
     }
 };
-
 
 //=============================================================================
 struct VertexFormatImpl final
@@ -600,7 +599,7 @@ static void dxProcessDrawQueue(DrawQueue* queue)
             // TODO: AppendConsumeBuffer support!
             //g_pImmediateContext->CopyStructureCount(buffer->indirectBuffer, call.indirectArgsOffset, buffer->dataUAV);
             g_pImmediateContext->CopyResource(buffer->indirectBuffer, buffer->dataBuffer);
-            g_pImmediateContext->DrawInstancedIndirect(buffer->indirectBuffer, call.indirectArgsOffset);
+            g_pImmediateContext->DrawInstancedIndirect(buffer->indirectBuffer, static_cast<UINT>(call.indirectArgsOffset));
         } break;
 
         case DrawCall::DrawIndexedInstancedIndirect: {
@@ -610,7 +609,7 @@ static void dxProcessDrawQueue(DrawQueue* queue)
             // TODO: AppendConsumeBuffer support!
             //g_pImmediateContext->CopyStructureCount(buffer->indirectBuffer, call.indirectArgsOffset, buffer->dataUAV);
             g_pImmediateContext->CopyResource(buffer->indirectBuffer, buffer->dataBuffer);
-            g_pImmediateContext->DrawIndexedInstancedIndirect(buffer->indirectBuffer, call.indirectArgsOffset);
+            g_pImmediateContext->DrawIndexedInstancedIndirect(buffer->indirectBuffer, static_cast<UINT>(call.indirectArgsOffset));
         } break;
 
         }
