@@ -7,19 +7,20 @@ cbuffer cbDefault : register(b0)
     float   numItems;
     uint    maxDrawCallCount;
     uint2   reserved;
+    matrix  viewProjection;
 };
 
-struct ConstantData
+struct LogialBufferData
 {
-    uint4  internalData;
-    matrix mvp;
+    uint4   drawCallData;
+    matrix  modelview;
 };
 
-StructuredBuffer<ConstantData>      initialBuffer       : register(t0);
-StructuredBuffer<uint>              occlusionDataBuffer : register(t1);
+StructuredBuffer<LogialBufferData>      initialBuffer           : register(t0);
+StructuredBuffer<uint>                  occlusionDataBuffer     : register(t1);
 
-RWStructuredBuffer<ConstantData>    finalBuffer         : register(u0);
-RWStructuredBuffer<uint4>           indirectBuffer      : register(u1);
+RWStructuredBuffer<LogialBufferData>    finalBuffer             : register(u0);
+RWStructuredBuffer<uint4>               indirectRenderBuffer    : register(u1);
 
 [numthreads(kBlockSize, 1, 1)]
 void cs_main(
@@ -36,11 +37,11 @@ void cs_main(
     [loop] for (uint i = 0; i < itemsPerThread; ++i) {
         uint idx = i + itemsPerThread * groupIndex + itemsPerGroup * groupID;
 
+        // Occlusion test
         uint objectVisible = occlusionDataBuffer[idx];
-
         [branch] if (objectVisible == 1)
         {
-            itemCount = indirectBuffer.IncrementCounter();
+            itemCount = indirectRenderBuffer.IncrementCounter();
             finalBuffer[itemCount] = initialBuffer[idx];
         }
     }
@@ -49,9 +50,9 @@ void cs_main(
 
     // Write out indirect args
     [branch] if (dispatchID.x == 0) {
-        int counter = indirectBuffer.IncrementCounter();
-        indirectBuffer[0] = uint4(maxDrawCallCount, max(counter - 1, 0), 0, 0);
-        //indirectBuffer[0] = uint4(maxDrawCallCount, numItems, 0, 0);
-        //indirectBuffer[0] = uint4(0, 0, 0, 0);
+        int counter = indirectRenderBuffer.IncrementCounter();
+        indirectRenderBuffer[0] = uint4(maxDrawCallCount, max(counter - 1, 0), 0, 0);
+        //indirectRenderBuffer[0] = uint4(maxDrawCallCount, numItems, 0, 0);
+        //indirectRenderBuffer[0] = uint4(0, 0, 0, 0);
     }
 }

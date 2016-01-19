@@ -165,17 +165,17 @@ struct PhysicalMeshBuffer final
 
 struct GrassObject final
 {
-    struct ConstantBuffer
+    struct DVPBuffer
     {
-        uint32_t    internalData[4];
+        uint32_t    drawCallData[4];
         float       modelview[16];
     };
 
     enum
     {
-        kConstantBufferSize = sizeof(ConstantBuffer)
+        kDVPBufferSize = sizeof(DVPBuffer)
     };
-    static_assert((kConstantBufferSize % 16) == 0, "Error: wrong buffer size");
+    static_assert((kDVPBufferSize % 16) == 0, "Error: wrong buffer size");
 
     glm::vec3           position;
     BoundingBox         boundingBox;
@@ -234,7 +234,7 @@ struct DVPGrassManager final
     util::BufferHandle          initialInstanceBuffer;
     util::BufferHandle          finalInstanceBuffer;
     util::BufferHandle          occlusionDataBuffer;
-    util::BufferHandle          indirectArgsBuffer;
+    util::BufferHandle          indirectRenderBuffer;
     
     uint32_t                    numInstances = 0;
     uint32_t                    maxDrawCallCount = 0;
@@ -340,15 +340,15 @@ struct DVPGrassManager final
             initialInstanceBuffer = sgfx::createBuffer(
                 sgfx::BufferFlags::CPUWrite | sgfx::BufferFlags::StructuredBuffer,
                 nullptr,
-                numInstances * GrassObject::kConstantBufferSize,
-                GrassObject::kConstantBufferSize
+                numInstances * GrassObject::kDVPBufferSize,
+                GrassObject::kDVPBufferSize
             );
 
             finalInstanceBuffer = sgfx::createBuffer(
                 sgfx::BufferFlags::GPUWrite | sgfx::BufferFlags::StructuredBuffer | sgfx::BufferFlags::GPUCounter,
                 nullptr,
-                numInstances * GrassObject::kConstantBufferSize,
-                GrassObject::kConstantBufferSize
+                numInstances * GrassObject::kDVPBufferSize,
+                GrassObject::kDVPBufferSize
             );
 
             occlusionDataBuffer = sgfx::createBuffer(
@@ -358,7 +358,7 @@ struct DVPGrassManager final
                 sizeof(uint32_t)
             );
 
-            indirectArgsBuffer = sgfx::createBuffer(
+            indirectRenderBuffer = sgfx::createBuffer(
                 sgfx::BufferFlags::GPUWrite | sgfx::BufferFlags::GPUCounter | sgfx::BufferFlags::IndirectArgs,
                 nullptr,
                 4 * sizeof(uint32_t),
@@ -373,24 +373,27 @@ struct DVPGrassManager final
             if (dataPtr != nullptr) {
 
                 for (size_t i = 0; i < numInstances; ++i) {
-                    size_t offset = i * GrassObject::kConstantBufferSize;
+                    size_t offset = i * GrassObject::kDVPBufferSize;
                     const GrassObject& obj = grassObjects[i];
 
                     glm::mat4 matrix = glm::translate(obj.position);
                     matrix = glm::transpose(matrix);
 
-                    GrassObject::ConstantBuffer constants;
-                    // fill internal data structure
-                    constants.internalData[0] = obj.vertexBuffer->physicalAddress;
-                    constants.internalData[1] = obj.indexBuffer->physicalAddress;
+                    //glm::vec4 boundingBoxMin = obj.boundingBox.min * matrix;
+                    //glm::vec4 boundingBoxMax = obj.boundingBox.max * matrix;
 
-                    constants.internalData[2] = 1; // draw indexed
-                    constants.internalData[3] = obj.count;
+                    GrassObject::DVPBuffer dvpData;
+                    // fill internal data structure
+                    dvpData.drawCallData[0] = obj.vertexBuffer->physicalAddress;
+                    dvpData.drawCallData[1] = obj.indexBuffer->physicalAddress;
+
+                    dvpData.drawCallData[2] = 1; // draw indexed
+                    dvpData.drawCallData[3] = obj.count;
 
                     // copy matrix
-                    std::memcpy(constants.modelview, glm::value_ptr(matrix), sizeof(constants.modelview));
+                    std::memcpy(dvpData.modelview,      glm::value_ptr(matrix),         sizeof(dvpData.modelview));
 
-                    std::memcpy(dataPtr + offset, &constants, GrassObject::kConstantBufferSize);
+                    std::memcpy(dataPtr + offset, &dvpData, GrassObject::kDVPBufferSize);
 
                     maxDrawCallCount = std::max(maxDrawCallCount, obj.count);
                 }
@@ -418,7 +421,7 @@ struct DVPGrassManager final
             sgfx::setResource(computeQueue, 0, initialInstanceBuffer);
             sgfx::setResource(computeQueue, 1, occlusionDataBuffer);
             sgfx::setResourceRW(computeQueue, 0, finalInstanceBuffer);
-            sgfx::setResourceRW(computeQueue, 1, indirectArgsBuffer);
+            sgfx::setResourceRW(computeQueue, 1, indirectRenderBuffer);
 
             //uint32_t groupCount = static_cast<uint32_t>(std::ceilf(numInstancesF / 128.0F));
             sgfx::submit(computeQueue, 1, 1, 1);
@@ -435,7 +438,7 @@ struct DVPGrassManager final
             sgfx::setResource(drawQueue, 1, physicalIndexBuffer.physicalBuffer);
             sgfx::setResource(drawQueue, 2, finalInstanceBuffer);
             sgfx::setResource(drawQueue, 3, grassTexture);
-            sgfx::drawInstancedIndirect(drawQueue, indirectArgsBuffer, 0);
+            sgfx::drawInstancedIndirect(drawQueue, indirectRenderBuffer, 0);
 
             // queue submit is done later
             //sgfx::submit(drawQueue);

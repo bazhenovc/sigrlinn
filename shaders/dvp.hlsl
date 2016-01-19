@@ -15,23 +15,23 @@ struct VertexData
     float4 boneWeights;
     uint   vertexColor;
 };
-StructuredBuffer<VertexData> g_VertexBuffer : register(t0);
-StructuredBuffer<uint>       g_IndexBuffer  : register(t1);
+StructuredBuffer<VertexData> physicalVertexBuffer : register(t0);
+StructuredBuffer<uint>       physicalIndexBuffer  : register(t1);
 
 // pipeline state
 #define DRAW 0
 #define DRAW_INDEXED 1
-struct ConstantData
+struct LogicalBufferData
 {
-    uint4   internalData;
+    uint4   drawCallData;
     matrix  modelview;
 };
-StructuredBuffer<ConstantData> g_ConstantBuffer : register(t2);
+StructuredBuffer<LogicalBufferData> logicalBuffer : register(t2);
 
 // samplers and textures
 
 #ifdef OCCLUSION_RENDER
-    RWStructuredBuffer<uint>    occlusionDataBuffer : register(u0);
+    RWStructuredBuffer<uint>  occlusionDataBuffer : register(u0);
 #else
     Texture2D    textureDiffuse : register(t3);
     SamplerState samplerLinear  : register(s0);
@@ -63,15 +63,15 @@ VS_OUTPUT vs_main(VS_INPUT input)
     uint instanceID = input.instanceID;
     uint vertexID   = input.vertexID;
 
-    ConstantData cdata = g_ConstantBuffer[instanceID];
+    LogicalBufferData data = logicalBuffer[instanceID];
 
-    uint vbID     = cdata.internalData[0];
-    uint ibID     = cdata.internalData[1];
-    uint drawType = cdata.internalData[2];
+    uint vbID     = data.drawCallData[0];
+    uint ibID     = data.drawCallData[1];
+    uint drawType = data.drawCallData[2];
 
     VertexData vdata;
-    [branch] if (drawType == DRAW_INDEXED) vdata = g_VertexBuffer[vbID + g_IndexBuffer[ibID + vertexID]];
-    else     if (drawType == DRAW)         vdata = g_VertexBuffer[vbID + vertexID];
+    [branch] if (drawType == DRAW_INDEXED) vdata = physicalVertexBuffer[vbID + physicalIndexBuffer[ibID + vertexID]];
+    else     if (drawType == DRAW)         vdata = physicalVertexBuffer[vbID + vertexID];
 
     float4 v_position = float4(vdata.position, 1.0);
 
@@ -81,12 +81,12 @@ VS_OUTPUT vs_main(VS_INPUT input)
 
     VS_OUTPUT output = (VS_OUTPUT)0;
 
-    output.position = mul(v_position, cdata.modelview);
+    output.position = mul(v_position, data.modelview);
     output.position = mul(output.position, viewProjection);
 
     output.texcoord0   = vdata.texcoord0;
     output.texcoord1   = vdata.texcoord1;
-    output.normal      = vdata.normal;//mul(vdata.normal,   g_ConstantBuffer[instanceID].World);
+    output.normal      = vdata.normal;//mul(vdata.normal,   logicalBuffer[instanceID].World);
     output.boneIDs     = vdata.boneIDs;
     output.boneWeights = vdata.boneWeights;
     output.vertexColor = vdata.vertexColor;
