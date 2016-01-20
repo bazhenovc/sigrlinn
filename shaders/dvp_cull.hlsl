@@ -46,7 +46,9 @@ void cs_main(
         }
     }
 
-    GroupMemoryBarrierWithGroupSync();
+    /// TODO: group memory barrier SHOULD be enough, BUT does not work on NV for some reason
+    //GroupMemoryBarrierWithGroupSync();
+    AllMemoryBarrierWithGroupSync();
 
     // Write out indirect args
     [branch] if (dispatchID.x == 0) {
