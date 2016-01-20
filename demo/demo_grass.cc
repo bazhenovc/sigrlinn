@@ -29,6 +29,7 @@
 #include <string>
 #include <stack>
 #include <algorithm>
+#include <sstream>
 
 #include <glm/glm.hpp>
 #include <glm/ext.hpp>
@@ -235,6 +236,7 @@ struct DVPGrassManager final
     util::BufferHandle          finalInstanceBuffer;
     util::BufferHandle          occlusionDataBuffer;
     util::BufferHandle          indirectRenderBuffer;
+    util::BufferHandle          indirectRenderBufferCPU;
     
     uint32_t                    numInstances = 0;
     uint32_t                    maxDrawCallCount = 0;
@@ -365,6 +367,13 @@ struct DVPGrassManager final
                 4 * sizeof(uint32_t)
             );
 
+            indirectRenderBufferCPU = sgfx::createBuffer(
+                sgfx::BufferFlags::CPURead,
+                nullptr,
+                4 * sizeof(uint32_t),
+                4 * sizeof(uint32_t)
+            );
+
             cullCSConstantBuffer = sgfx::createConstantBuffer(&cullCSConstantData, sizeof(CullCSConstantBuffer));
             renderConstantBuffer = sgfx::createConstantBuffer(&renderConstantData, sizeof(renderConstantData));
 
@@ -457,6 +466,35 @@ struct DVPGrassManager final
             //sgfx::submit(occlusionQueue);
         }
     }
+
+    void displayOcclusionCullingStats(Application* app)
+    {
+        sgfx::copyResource(indirectRenderBuffer, indirectRenderBufferCPU);
+
+        void* dataPtr = sgfx::mapBuffer(indirectRenderBufferCPU, sgfx::MapType::Read);
+        if (dataPtr != nullptr) {
+            uint32_t* data = reinterpret_cast<uint32_t*>(dataPtr);
+
+            static uint32_t worstVisible = 0;
+            static uint32_t bestVisible  = std::numeric_limits<uint32_t>::max();
+
+            worstVisible = std::max(worstVisible, data[1]);
+            bestVisible  = std::min(bestVisible, data[1]);
+
+            std::ostringstream ss;
+            ss
+                << "Visible objects: " << data[1] << " / " << numInstances
+                << " culled: " << numInstances - data[1]
+                << " worst: " << worstVisible
+                << " best: " << bestVisible
+                << "\n";
+
+            //OutputDebugString(ss.str().c_str());
+            app->setWindowTitle(ss.str().c_str());
+
+            sgfx::unmapBuffer(indirectRenderBufferCPU);
+        }
+    }
 };
 
 class GrassApplication : public Application
@@ -472,7 +510,8 @@ public:
     util::DrawQueueHandle       drawQueue;
 
     util::TextureHandle         colorBuffer;
-    util::TextureHandle         depthStencilBuffer;
+    util::TextureHandle         depthBuffer;
+    util::TextureHandle         occlusionDepthBuffer;
     util::RenderTargetHandle    renderTarget;
 
     // bounding box render
@@ -485,11 +524,26 @@ public:
     util::DrawQueueHandle       occlusionQueue;
     util::RenderTargetHandle    occlusionRT;
 
+    // CS downscale
+    util::ConstantBufferHandle  downscaleConstBuffer;
+    util::ComputeShaderHandle   downscaleShader;
+    util::ComputeQueueHandle    downscaleQueue;
+
     // CS culling
     util::ComputeShaderHandle   instanceCullShader;
     util::ComputeQueueHandle    instanceCullQueue;
 
     DVPGrassManager*            grassManager;
+
+    glm::mat4                   MVP;
+    glm::mat4                   prevMVP;
+
+    struct DownscaleConstData
+    {
+        float rtSize[4];
+        float invViewProjection[16];
+        float viewProjection[16];
+    } downscaleConstData;
 
 public:
 
@@ -515,20 +569,23 @@ public:
 
         // create render target
         colorBuffer        = sgfx::getBackBuffer();
-        depthStencilBuffer = sgfx::createTexture2D(
-            width, height, sgfx::DataFormat::D24S8, 1, sgfx::TextureFlags::DepthStencil
+        depthBuffer        = sgfx::createTexture2D(
+            width, height, sgfx::DataFormat::D32F, 1, sgfx::TextureFlags::DepthStencil
+        );
+        occlusionDepthBuffer = sgfx::createTexture2D(
+            width, height, sgfx::DataFormat::R32F, 1, sgfx::TextureFlags::GPUWrite
         );
 
         sgfx::RenderTargetDescriptor renderTargetDesc;
         renderTargetDesc.numColorTextures    = 1;
         renderTargetDesc.colorTextures[0]    = colorBuffer;
-        renderTargetDesc.depthStencilTexture = depthStencilBuffer;
+        renderTargetDesc.depthStencilTexture = depthBuffer;
 
         renderTarget = sgfx::createRenderTarget(renderTargetDesc);
 
         sgfx::RenderTargetDescriptor occlusionRTDesc;
         occlusionRTDesc.numColorTextures        = 0;
-        occlusionRTDesc.depthStencilTexture     = depthStencilBuffer;
+        occlusionRTDesc.depthStencilTexture     = depthBuffer;
 
         occlusionRT = sgfx::createRenderTarget(occlusionRTDesc);
 
@@ -624,6 +681,11 @@ public:
         // compute shaders
         instanceCullShader  = loadCS("shaders/dvp_cull.hlsl");
         instanceCullQueue   = sgfx::createComputeQueue(instanceCullShader);
+
+        downscaleShader     = loadCS("shaders/dvp_downscale.hlsl");
+        downscaleQueue      = sgfx::createComputeQueue(downscaleShader);
+
+        downscaleConstBuffer = sgfx::createConstantBuffer(&downscaleConstData, sizeof(DownscaleConstData));
     }
 
     virtual void releaseSampleData() override
@@ -641,6 +703,9 @@ public:
         static float t = 0.0f;
         static glm::vec3 cameraPosition = glm::vec3(0.0F, 2.5F, -200);
 
+        static uint32_t frameCounter = 0;
+        frameCounter ++;
+
         static ULONGLONG dwTimeStart = 0;
         ULONGLONG dwTimeCur = GetTickCount64();
         if (dwTimeStart == 0)
@@ -656,16 +721,49 @@ public:
             sprintf_s(buf, "DT: %f\n", t);
             OutputDebugString(buf);
         }
-        cameraPosition.z += t * 2.0F;
 
-        glm::mat4 projection = glm::perspective(glm::pi<float>() / 2.0F, width / (FLOAT)height, 0.01f, 50000.0f);
-        glm::mat4 view       = glm::lookAt(cameraPosition, cameraPosition + glm::vec3(0.0F, 0.0F, 1.0F), glm::vec3(0.0F, 1.0F, 0.0F));
+        static float cameraAngle = 0.0F;
 
-        glm::mat4 mvp = projection * view;
+        float cameraSpeed = 2.0F;
+        if (GetAsyncKeyState(VK_SHIFT)) cameraSpeed = 20.0F;
+
+        if (GetAsyncKeyState(VK_CONTROL)) {
+            if (GetAsyncKeyState(VK_LEFT))      cameraAngle += t * 5.0F;
+            if (GetAsyncKeyState(VK_RIGHT))     cameraAngle -= t * 5.0F;
+        } else {
+            if (GetAsyncKeyState(VK_UP))        cameraPosition.z += t * cameraSpeed;
+            if (GetAsyncKeyState(VK_DOWN))      cameraPosition.z -= t * cameraSpeed;
+            if (GetAsyncKeyState(VK_LEFT))      cameraPosition.x += t * cameraSpeed;
+            if (GetAsyncKeyState(VK_RIGHT))     cameraPosition.x -= t * cameraSpeed;
+            if (GetAsyncKeyState(VK_HOME))      cameraPosition.y += t * cameraSpeed;
+            if (GetAsyncKeyState(VK_END))       cameraPosition.y -= t * cameraSpeed;
+        }
+
+        if ((frameCounter % 10) == 0)
+            grassManager->displayOcclusionCullingStats(this);
+
+        glm::mat4 projection = glm::perspective(glm::pi<float>() / 2.0F, width / (FLOAT)height, 0.1f, 50000.0f);
+        glm::mat4 view       = glm::lookAt(cameraPosition, cameraPosition + glm::vec3(sin(cameraAngle), 0.0F, cos(cameraAngle)), glm::vec3(0.0F, 1.0F, 0.0F));
+
+        prevMVP = MVP;
+        MVP     = projection * view;
 
         // actually draw some stuff
         {
-            grassManager->render(drawQueue, occlusionQueue, instanceCullQueue, mvp);
+            grassManager->render(drawQueue, occlusionQueue, instanceCullQueue, MVP);
+        }
+
+        // update const buffers
+        {
+            downscaleConstData.rtSize[0] = static_cast<float>(width);
+            downscaleConstData.rtSize[1] = static_cast<float>(height);
+            downscaleConstData.rtSize[2] = 0.0F;
+            downscaleConstData.rtSize[3] = 0.0F;
+            
+            std::memcpy(downscaleConstData.viewProjection,      glm::value_ptr(glm::transpose(MVP)),                    sizeof(downscaleConstData.viewProjection));
+            std::memcpy(downscaleConstData.invViewProjection,   glm::value_ptr(glm::transpose(glm::inverse(prevMVP))),  sizeof(downscaleConstData.invViewProjection));
+
+            sgfx::updateConstantBuffer(downscaleConstBuffer, &downscaleConstData);
         }
 
         // submit queues
@@ -686,6 +784,37 @@ public:
                 sgfx::endPerfEvent();
             }
 
+            sgfx::setRenderTarget(sgfx::RenderTargetHandle::invalidHandle());
+            sgfx::flush();
+
+            // TODO: according to the CryTek paper: http://www.slideshare.net/TiagoAlexSousa/secrets-of-cryengine-3-graphics-technology
+            // depth reprojection should greatly improve culling efficiency, however it seems like this demo is simply not the case.
+            // therefore reprojection is temporarily disabled.
+            //
+            // Another option is that there's no CPU readback, therefore there's only ONE frame latency, instead of 3-5.
+            //
+            // downscale and reproject
+            if (0) {
+                sgfx::beginPerfEvent(L"DownscaleAndReproject");
+
+                sgfx::clearTextureRW(occlusionDepthBuffer, 1.0F);
+
+                sgfx::setConstantBuffer(downscaleQueue, 0, downscaleConstBuffer);
+                sgfx::setResource(downscaleQueue, 0, depthBuffer);
+                sgfx::setResourceRW(downscaleQueue, 0, occlusionDepthBuffer);
+
+                sgfx::submit(
+                    downscaleQueue,
+                    static_cast<uint32_t>(std::ceilf(width / 16.0F)),
+                    static_cast<uint32_t>(std::ceilf(height / 16.0F)),
+                    1
+                );
+
+                sgfx::copyResource(occlusionDepthBuffer, depthBuffer);
+
+                sgfx::endPerfEvent();
+            }
+
             // occlusion queue
             {
                 sgfx::beginPerfEvent(L"OcclusionRender");
@@ -700,10 +829,7 @@ public:
                 sgfx::endPerfEvent();
             }
 
-            // TODO: remove redundant RT change
-            // this one is needed to reset RW resource bound to the render target output
-            sgfx::setResourceRW(occlusionRT, 0, sgfx::BufferHandle::invalidHandle());
-            sgfx::setRenderTarget(occlusionRT);
+            sgfx::setRenderTarget(sgfx::RenderTargetHandle::invalidHandle());
         }
 
         sgfx::present(1);

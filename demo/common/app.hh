@@ -64,7 +64,7 @@ namespace util
     struct GraphicsObjectHandle final
     {
     private:
-        T gfxObject;
+        T gfxObject = T::invalidHandle();
 
     public:
         inline          GraphicsObjectHandle()                                      {}
@@ -146,6 +146,7 @@ public:
     virtual void renderSample() = 0;
 
     void render();
+    void setWindowTitle(const char* str);
 };
 
 extern Application* ApplicationInstance;

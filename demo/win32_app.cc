@@ -217,6 +217,11 @@ void Application::render()
     renderSample();
 }
 
+void Application::setWindowTitle(const char* str)
+{
+    SetWindowTextA(g_hWnd, str);
+}
+
 void Application::cleanupDevice()
 {
     releaseSampleData();

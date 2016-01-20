@@ -535,6 +535,7 @@ void                    setConstantBuffer(ComputeQueueHandle handle, uint32_t id
 void                    setResource(ComputeQueueHandle handle, uint32_t idx, BufferHandle resource);
 void                    setResource(ComputeQueueHandle handle, uint32_t idx, TextureHandle resource);
 void                    setResourceRW(ComputeQueueHandle handle, uint32_t idx, BufferHandle resource);
+void                    setResourceRW(ComputeQueueHandle handle, uint32_t idx, TextureHandle resource);
 
 void                    submit(ComputeQueueHandle handle, uint32_t x, uint32_t y, uint32_t z);
 
@@ -639,6 +640,7 @@ void                    drawInstancedIndirect(DrawQueueHandle dq, BufferHandle i
 void                    drawIndexedInstancedIndirect(DrawQueueHandle dq, BufferHandle indirectArgs, size_t argsOffset);
 
 void                    submit(DrawQueueHandle handle);
+void                    flush();
 
 // performance markers
 void                    beginPerfEvent(const wchar_t* name);
@@ -1138,6 +1140,11 @@ struct ComputeQueue final
     SGFX_FORCE_INLINE void setResourceRW(uint32_t idx, BufferHandle resource)
     {
         shaderResourcesRW[idx] = ShaderResource(false, resource.value);
+    }
+
+    SGFX_FORCE_INLINE void setResourceRW(uint32_t idx, TextureHandle resource)
+    {
+        shaderResourcesRW[idx] = ShaderResource(true, resource.value);
     }
 };
 

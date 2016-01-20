@@ -961,6 +961,14 @@ void setResourceRW(ComputeQueueHandle handle, uint32_t idx, BufferHandle resourc
     }
 }
 
+void setResourceRW(ComputeQueueHandle handle, uint32_t idx, TextureHandle resource)
+{
+    if (handle != ComputeQueueHandle::invalidHandle()) {
+        ComputeQueue* queue = static_cast<ComputeQueue*>(handle.value);
+        queue->setResourceRW(idx, resource);
+    }
+}
+
 void submit(ComputeQueueHandle handle, uint32_t x, uint32_t y, uint32_t z)
 {
     if (handle != ComputeQueueHandle::invalidHandle()) {
@@ -1961,19 +1969,18 @@ void setResourceRW(RenderTargetHandle handle, uint32_t idx, TextureHandle resour
 
 void setRenderTarget(RenderTargetHandle handle)
 {
+    // reset previous RTs
+    ID3D11RenderTargetView*     rtViews[RenderTargetSlot::Count]    = { nullptr };
+    ID3D11UnorderedAccessView*  uaViews[1]                          = { nullptr };
+
+    g_pImmediateContext->OMSetRenderTargetsAndUnorderedAccessViews(
+        RenderTargetSlot::Count - 1, rtViews,
+        nullptr,
+        RenderTargetSlot::Count - 1, 1, uaViews, nullptr
+    );
+
     if (handle != RenderTargetHandle::invalidHandle()) {
         RenderTargetImpl* rtimpl = static_cast<RenderTargetImpl*>(handle.value);
-
-        // reset previous RTs
-        ID3D11RenderTargetView*     rtViews[RenderTargetSlot::Count] = { nullptr };
-        //ID3D11UnorderedAccessView*  uaViews[RenderTargetSlot::Count] = { nullptr };
-
-        //g_pImmediateContext->OMSetRenderTargetsAndUnorderedAccessViews(
-        //    RenderTargetSlot::Count, rtViews,
-        //    nullptr,
-        //    RenderTargetSlot::Count, RenderTargetSlot::Count - 1, uaViews, nullptr
-        //);
-        g_pImmediateContext->OMSetRenderTargets(RenderTargetSlot::Count, rtViews, nullptr);
 
         g_pImmediateContext->OMSetRenderTargetsAndUnorderedAccessViews(
             rtimpl->numRenderTargets, rtimpl->renderTargetViews,
@@ -2160,6 +2167,11 @@ void submit(DrawQueueHandle handle)
             queue->clear();
         }
     }
+}
+
+void flush()
+{
+    g_pImmediateContext->Flush();
 }
 
 void beginPerfEvent(const wchar_t* name)
