@@ -247,7 +247,7 @@ struct DXSharedBuffer final
     ID3D11Resource*            dataBuffer       = nullptr;
     ID3D11Buffer*              indirectBuffer   = nullptr;
     ID3D11ShaderResourceView*  dataView         = nullptr;
-    ID3D11UnorderedAccessView* dataUAV          = 0;
+    ID3D11UnorderedAccessView* dataUAV          = nullptr;
     size_t                     dataBufferSize   = 0;
 
     SGFX_FORCE_INLINE DXSharedBuffer() {}
