@@ -34,7 +34,7 @@ GNM      |
 SGFX is designed with common legacy engines in mind, therefore certain decisions are made to simplify integration process.
 For instance, SGFX does not sort the draw calls for you, it does not ship with a custom cross-API shader language, etc.
 
-Library complilation is also as simple, as possible: just drag and drop the source files to your solution or simply use the bundled [CMake](http://www.cmake.org/) script. No extra dependencies or any additional include directories are required (except for the DX SDK, but you probably already has this).
+Library complilation is also as simple, as possible: just drag and drop the source files to your solution or simply use the bundled [CMake](http://www.cmake.org/) script. No extra dependencies or any additional include directories are required (except for the DX SDK, but you probably already have this).
 
 ### Features
 At the current stage of development the library supports:
