@@ -373,17 +373,18 @@ public:
         if (dwTimeStart == 0)
             dwTimeStart = dwTimeCur;
         t = (dwTimeCur - dwTimeStart) / 1000.0f;
+        dwTimeStart = dwTimeCur;
 
         static glm::vec3 cameraPosition = glm::vec3(0.0F, 2.5F, -130);
 
         static float cameraAngle = 0.0F;
 
-        float cameraSpeed = 0.003F;
-        if (GetAsyncKeyState(VK_SHIFT)) cameraSpeed = 0.1F;
+        float cameraSpeed = 2.0F;
+        if (GetAsyncKeyState(VK_SHIFT)) cameraSpeed = 10.0F;
 
         if (GetAsyncKeyState(VK_CONTROL)) {
-            if (GetAsyncKeyState(VK_LEFT))      cameraAngle += t * 0.001F;
-            if (GetAsyncKeyState(VK_RIGHT))     cameraAngle -= t * 0.001F;
+            if (GetAsyncKeyState(VK_LEFT))      cameraAngle += t * 0.5F;
+            if (GetAsyncKeyState(VK_RIGHT))     cameraAngle -= t * 0.5F;
         } else {
             if (GetAsyncKeyState(VK_UP))        cameraPosition.z += t * cameraSpeed;
             if (GetAsyncKeyState(VK_DOWN))      cameraPosition.z -= t * cameraSpeed;
