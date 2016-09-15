@@ -203,14 +203,7 @@ public:
     {
         enum { MaxBones = 4 };
         glm::vec3   position;
-        glm::vec2   texcoord0;
-        glm::vec2   texcoord1;
         glm::vec3   normal;
-
-        // not used
-        uint8_t boneIDs[MaxBones];
-        float   boneWeights[MaxBones];
-        uint8_t color[4];
     };
 
     struct ConstantBuffer
@@ -272,25 +265,13 @@ public:
         constantBuffer = sgfx::createConstantBuffer(nullptr, sizeof(ConstantBuffer));
 
         // mesh data
-        const size_t stride1 = 0;                             // Position
-        const size_t stride2 = stride1 + 3 * sizeof(float);   // uv0
-        const size_t stride3 = stride2 + 2 * sizeof(float);   // uv1
-        const size_t stride4 = stride3 + 2 * sizeof(float);   // normal
-        const size_t stride5 = stride4 + 3 * sizeof(float);   // boneIDs
-        const size_t stride6 = stride5 + 4 * sizeof(uint8_t); // boneWeights
-        const size_t stride7 = stride6 + 4 * sizeof(float);   // color
         sgfx::VertexElementDescriptor vfElements[] = {
-            { "POSITION",    0, sgfx::DataFormat::RGB32F,  0, stride1 },
-            { "TEXCOORDA",   0, sgfx::DataFormat::RG32F,   0, stride2 },
-            { "TEXCOORDB",   0, sgfx::DataFormat::RG32F,   0, stride3 },
-            { "NORMAL",      0, sgfx::DataFormat::RGB32F,  0, stride4 },
-            { "BONEIDS",     0, sgfx::DataFormat::R32U,    0, stride5 },
-            { "BONEWEIGHTS", 0, sgfx::DataFormat::RGBA32F, 0, stride6 },
-            { "VCOLOR",      0, sgfx::DataFormat::R32U,    0, stride7 }
+            { "POSITION",    0, sgfx::DataFormat::RGB32F,  0, 0 * sizeof(float) },
+            { "NORMAL",      0, sgfx::DataFormat::RGB32F,  0, 3 * sizeof(float) },
         };
         size_t vfSize = sizeof(vfElements) / sizeof(sgfx::VertexElementDescriptor);
 
-        vertexFormat = loadVF(vfElements, vfSize, "shaders/sample0.hlsl");
+        vertexFormat = loadVF(vfElements, vfSize, "shaders/cmrs.hlsl");
 
         surface.generateSubdivisionPlane(256.0F, 12);
         surface.generateSineWave();
@@ -302,8 +283,8 @@ public:
 
         //indexBuffer  = sgfx::createBuffer(sgfx::BufferFlags::IndexBuffer, cubeIndices, sizeof(uint32_t) * indicesSize, sizeof(uint32_t));
 
-        vsHandle = loadVS("shaders/sample0.hlsl");
-        psHandle = loadPS("shaders/sample0.hlsl");
+        vsHandle = loadVS("shaders/cmrs.hlsl");
+        psHandle = loadPS("shaders/cmrs.hlsl");
 
         if (vsHandle != sgfx::VertexShaderHandle::invalidHandle() && psHandle != sgfx::PixelShaderHandle::invalidHandle()) {
             ssHandle = sgfx::linkSurfaceShader(
