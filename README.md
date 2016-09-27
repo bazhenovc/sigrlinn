@@ -12,7 +12,7 @@ In the nearest future we will have to support 5 (!) graphics APIs: DX11, DX12, O
 
 SGFX tries to address only the first issue by providing an extremely thin layer that connects your application code to all 5 graphics APIs and does not stand in your way. It is designed with simplicity and flexibility in mind, it is open source (MIT license), and it is extremely small and easy to integrate.
 
-It features DX12-like interface, all API functions are inside a single header file, while implementations are in several source files (typically one source file per gfx backend). Everything is somewhere around 5 KLOC, so it is also easy to contribute new features, modify and debug the code and even replace the parts you don’t like. The code is extremely clean and every comma is there for a reason.
+It features DX12-like interface, all API functions are inside a single header file, while implementations are in several source files (typically one source file per gfx backend). Everything is somewhere around 5 KLOC, so it is also easy to contribute new features, modify and debug the code and even replace the parts you don’t like.
 
 ### Target audience
 This library is intented for those developers, who either have their own graphics engine, or use an open source one which may or will not be updated for some reasons. SGFX aims to simplify different platforms and different graphics API support, which in turn allows developers to focus more on the game visuals rather then fiddling with platform support and API-specific bugs.
