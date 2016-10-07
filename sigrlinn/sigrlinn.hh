@@ -380,6 +380,7 @@ struct VertexElementDescriptor // TODO: rework to make it more compatible with G
     DataFormat        format;
     uint32_t          slot;          // not used on GL
     uint64_t          offset;
+    bool              perInstanceData;
 };
 
 struct SamplerStateDescriptor
@@ -623,7 +624,7 @@ void                    setSamplerState(DrawQueueHandle handle, uint32_t idx, Sa
 
 // per draw call
 void                    setPrimitiveTopology(DrawQueueHandle qd, PrimitiveTopology topology);
-void                    setVertexBuffer(DrawQueueHandle dq, BufferHandle vb);
+void                    setVertexBuffer(DrawQueueHandle dq, BufferHandle vb, uint32_t idx = 0);
 void                    setIndexBuffer(DrawQueueHandle dq, BufferHandle ib);
 
 void                    setConstantBuffer(DrawQueueHandle handle, uint32_t idx, ConstantBufferHandle buffer);
@@ -633,8 +634,8 @@ void                    setResource(DrawQueueHandle handle, uint32_t idx, Textur
 void                    draw(DrawQueueHandle dq, uint32_t count, uint32_t startVertex);
 void                    drawIndexed(DrawQueueHandle dq, uint32_t count, uint32_t startIndex, uint32_t startVertex);
 
-void                    drawInstanced(DrawQueueHandle dq, uint32_t instanceCount, uint32_t count, uint32_t startVertex);
-void                    drawIndexedInstanced(DrawQueueHandle dq, uint32_t instanceCount, uint32_t count, uint32_t startIndex, uint32_t startVertex);
+void                    drawInstanced(DrawQueueHandle dq, uint32_t instanceCount, uint32_t count, uint32_t startVertex, uint32_t startInstance);
+void                    drawIndexedInstanced(DrawQueueHandle dq, uint32_t instanceCount, uint32_t count, uint32_t startIndex, uint32_t startVertex, uint32_t startInstance);
 
 void                    drawInstancedIndirect(DrawQueueHandle dq, BufferHandle indirectArgs, size_t argsOffset);
 void                    drawIndexedInstancedIndirect(DrawQueueHandle dq, BufferHandle indirectArgs, size_t argsOffset);
@@ -969,12 +970,13 @@ struct DrawCall final
     {
         kMaxConstantBuffers     = 8,
         kMaxShaderResources     = 128,
+        kMaxVertexBuffers       = 16
     };
 
     ConstantBufferHandle    constantBuffers[kMaxConstantBuffers];
     ShaderResource          shaderResources[kMaxShaderResources];
 
-    BufferHandle      vertexBuffer;
+    BufferHandle      vertexBuffers[kMaxVertexBuffers];
     BufferHandle      indexBuffer;
     BufferHandle      indirectArgsBuffer;
     size_t            indirectArgsOffset;
@@ -984,6 +986,7 @@ struct DrawCall final
     uint32_t count;
     uint32_t startVertex;
     uint32_t startIndex;
+    uint32_t startInstance;
     Type     type;
 };
 
@@ -1017,7 +1020,7 @@ public:
     }
 
     SGFX_FORCE_INLINE void setPrimitiveTopology(PrimitiveTopology topology)     { currentDrawCall.primitiveTopology = topology; }
-    SGFX_FORCE_INLINE void setVertexBuffer(BufferHandle handle)                 { currentDrawCall.vertexBuffer = handle; }
+    SGFX_FORCE_INLINE void setVertexBuffer(uint32_t idx, BufferHandle handle)   { currentDrawCall.vertexBuffers[idx] = handle; }
     SGFX_FORCE_INLINE void setIndexBuffer(BufferHandle handle)                  { currentDrawCall.indexBuffer  = handle; }
 
     SGFX_FORCE_INLINE void setSamplerState(uint32_t idx, SamplerStateHandle handle)
@@ -1060,23 +1063,25 @@ public:
         std::memset(&currentDrawCall, 0, sizeof(currentDrawCall));
     }
 
-    SGFX_FORCE_INLINE void drawInstanced(uint32_t instanceCount, uint32_t count, uint32_t startVertex)
+    SGFX_FORCE_INLINE void drawInstanced(uint32_t instanceCount, uint32_t count, uint32_t startVertex, uint32_t startInstance)
     {
         currentDrawCall.instanceCount = instanceCount;
         currentDrawCall.count         = count;
         currentDrawCall.startVertex   = startVertex;
         currentDrawCall.startIndex    = 0;
+        currentDrawCall.startInstance = startInstance;
         currentDrawCall.type          = DrawCall::DrawInstanced;
         drawCalls.Add(currentDrawCall);
         std::memset(&currentDrawCall, 0, sizeof(currentDrawCall));
     }
 
-    SGFX_FORCE_INLINE void drawIndexedInstanced(uint32_t instanceCount, uint32_t count, uint32_t startIndex, uint32_t startVertex)
+    SGFX_FORCE_INLINE void drawIndexedInstanced(uint32_t instanceCount, uint32_t count, uint32_t startIndex, uint32_t startVertex, uint32_t startInstance)
     {
         currentDrawCall.instanceCount = instanceCount;
         currentDrawCall.count         = count;
         currentDrawCall.startVertex   = startVertex;
         currentDrawCall.startIndex    = startIndex;
+        currentDrawCall.startInstance = startInstance;
         currentDrawCall.type          = DrawCall::DrawIndexedInstanced;
         drawCalls.Add(currentDrawCall);
         std::memset(&currentDrawCall, 0, sizeof(currentDrawCall));

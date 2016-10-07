@@ -123,13 +123,13 @@ public:
 
     typedef std::vector<sgfx::ShaderCompileMacro> ShaderMacroVector;
 
-    bool loadShader(const char* path, const ShaderMacroVector& macros, sgfx::ShaderCompileTarget target, void*& outData, size_t& outSize);
-    sgfx::VertexShaderHandle   loadVS(const char* path, const ShaderMacroVector& macros = ShaderMacroVector());
-    sgfx::GeometryShaderHandle loadGS(const char* path, const ShaderMacroVector& macros = ShaderMacroVector());
-    sgfx::PixelShaderHandle    loadPS(const char* path, const ShaderMacroVector& macros = ShaderMacroVector());
-    sgfx::ComputeShaderHandle  loadCS(const char* path, const ShaderMacroVector& macros = ShaderMacroVector());
+    static bool loadShader(const char* path, const ShaderMacroVector& macros, sgfx::ShaderCompileTarget target, void*& outData, size_t& outSize);
+    static sgfx::VertexShaderHandle   loadVS(const char* path, const ShaderMacroVector& macros = ShaderMacroVector());
+    static sgfx::GeometryShaderHandle loadGS(const char* path, const ShaderMacroVector& macros = ShaderMacroVector());
+    static sgfx::PixelShaderHandle    loadPS(const char* path, const ShaderMacroVector& macros = ShaderMacroVector());
+    static sgfx::ComputeShaderHandle  loadCS(const char* path, const ShaderMacroVector& macros = ShaderMacroVector());
 
-    sgfx::VertexFormatHandle   loadVF(sgfx::VertexElementDescriptor* vfElements, size_t vfElementsSize, const char* shaderPath);
+    static sgfx::VertexFormatHandle   loadVF(sgfx::VertexElementDescriptor* vfElements, size_t vfElementsSize, const char* shaderPath);
 
 #ifdef APP_WIN32
     HRESULT initWindow(HINSTANCE hInstance, int nCmdShow);

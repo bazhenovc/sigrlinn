@@ -130,8 +130,10 @@ sgfx::VertexFormatHandle Application::loadVF(sgfx::VertexElementDescriptor* vfEl
     size_t bytecodeSize = 0;
 
     sgfx::VertexFormatHandle ret = sgfx::VertexFormatHandle::invalidHandle();
+    ShaderMacroVector macros;
+    macros.push_back({"VF", "1"});
 
-    if (loadShader(shaderPath, ShaderMacroVector(), sgfx::ShaderCompileTarget::VS, bytecode, bytecodeSize)) {
+    if (loadShader(shaderPath, macros, sgfx::ShaderCompileTarget::VS, bytecode, bytecodeSize)) {
         ret = sgfx::createVertexFormat(
             vfElements, vfElementsSize,
             bytecode, bytecodeSize,

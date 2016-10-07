@@ -249,6 +249,7 @@ struct DXSharedBuffer final
     ID3D11ShaderResourceView*  dataView         = nullptr;
     ID3D11UnorderedAccessView* dataUAV          = nullptr;
     size_t                     dataBufferSize   = 0;
+    size_t                     dataBufferStride = 0;
 
     SGFX_FORCE_INLINE DXSharedBuffer() {}
     SGFX_FORCE_INLINE ~DXSharedBuffer()
@@ -445,7 +446,6 @@ struct DXStateCache final
 struct VertexFormatImpl final
 {
     ID3D11InputLayout* inputLayout;
-    UINT               stride;
 };
 
 struct SurfaceShaderImpl final
@@ -562,21 +562,30 @@ static void dxProcessDrawQueue(DrawQueue* queue)
 
     // process draw calls
     for (const DrawCall& call: queue->getDrawCalls()) {
-        DXSharedBuffer* vertexBuffer = static_cast<DXSharedBuffer*>(call.vertexBuffer.value);
         DXSharedBuffer* indexBuffer  = static_cast<DXSharedBuffer*>(call.indexBuffer.value);
         UINT            offset       = 0;
 
         g_pImmediateContext->IASetPrimitiveTopology(MapPrimitiveTopology[static_cast<size_t>(call.primitiveTopology)]);
         if (psimpl->vertexFormat != nullptr) {
-            ID3D11Buffer* vbuffer = nullptr;
-            if (vertexBuffer != nullptr)
-                vbuffer = static_cast<ID3D11Buffer*>(vertexBuffer->dataBuffer);
+
+            for (size_t i = 0; i < DrawCall::kMaxVertexBuffers; ++i) {
+                DXSharedBuffer* vertexBuffer = static_cast<DXSharedBuffer*>(call.vertexBuffers[i].value);
+
+                // TODO: state cache for vertex buffers
+                if (vertexBuffer != nullptr) {
+                    ID3D11Buffer* vbuffer = nullptr;
+                    if (vertexBuffer != nullptr)
+                        vbuffer = static_cast<ID3D11Buffer*>(vertexBuffer->dataBuffer);
+
+                    UINT stride = static_cast<UINT>(vertexBuffer->dataBufferStride);
+
+                    g_pImmediateContext->IASetVertexBuffers(static_cast<UINT>(i), 1, &vbuffer, &stride, &offset);
+                } else break;
+            }
 
             ID3D11Buffer* ibuffer = nullptr;
             if (indexBuffer != nullptr)
                 ibuffer = static_cast<ID3D11Buffer*>(indexBuffer->dataBuffer);
-
-            g_pImmediateContext->IASetVertexBuffers(0, 1, &vbuffer, &psimpl->vertexFormat->stride, &offset);
             g_pImmediateContext->IASetIndexBuffer(ibuffer, DXGI_FORMAT_R32_UINT, 0); // TODO: different index format
         }
 
@@ -589,8 +598,8 @@ static void dxProcessDrawQueue(DrawQueue* queue)
         switch (call.type) {
         case DrawCall::Draw:                 { g_pImmediateContext->Draw(call.count, call.startVertex); } break;
         case DrawCall::DrawIndexed:          { g_pImmediateContext->DrawIndexed(call.count, call.startIndex, call.startVertex); } break;
-        case DrawCall::DrawInstanced:        { g_pImmediateContext->DrawInstanced(call.count, call.instanceCount, call.startVertex, 0); } break;
-        case DrawCall::DrawIndexedInstanced: { g_pImmediateContext->DrawIndexedInstanced(call.count, call.instanceCount, call.startIndex, call.startVertex, 0); } break;
+        case DrawCall::DrawInstanced:        { g_pImmediateContext->DrawInstanced(call.count, call.instanceCount, call.startVertex, call.startInstance); } break;
+        case DrawCall::DrawIndexedInstanced: { g_pImmediateContext->DrawIndexedInstanced(call.count, call.instanceCount, call.startIndex, call.startVertex, call.startInstance); } break;
 
         case DrawCall::DrawInstancedIndirect: {
 
@@ -1051,18 +1060,14 @@ VertexFormatHandle createVertexFormat(
     D3D11_INPUT_ELEMENT_DESC* inputData = reinterpret_cast<D3D11_INPUT_ELEMENT_DESC*>(alloca(totalSize));
     std::memset(inputData, 0, totalSize);
 
-    UINT stride = 0;
-
     for (size_t i = 0; i < size; ++i) {
         inputData[i].SemanticName         = elements[i].semanticName;
         inputData[i].SemanticIndex        = elements[i].semanticIndex;
         inputData[i].Format               = MapDataFormat[static_cast<size_t>(elements[i].format)];
         inputData[i].InputSlot            = elements[i].slot;
         inputData[i].AlignedByteOffset    = static_cast<UINT>(elements[i].offset);
-        inputData[i].InputSlotClass       = D3D11_INPUT_PER_VERTEX_DATA;
+        inputData[i].InputSlotClass       = elements[i].perInstanceData ? D3D11_INPUT_PER_INSTANCE_DATA : D3D11_INPUT_PER_VERTEX_DATA;
         inputData[i].InstanceDataStepRate = 0;
-
-        stride += dxFormatStride(elements[i].format);
     }
 
     // validate first
@@ -1078,7 +1083,6 @@ VertexFormatHandle createVertexFormat(
 
     VertexFormatImpl* impl = sgfx_new<VertexFormatImpl>();
     impl->inputLayout = layout;
-    impl->stride      = stride;
     return VertexFormatHandle(impl);
 }
 
@@ -1276,7 +1280,8 @@ BufferHandle createBuffer(uint32_t flags, const void* mem, size_t size, size_t s
     }
 
     DXSharedBuffer* buffer = sgfx_new<DXSharedBuffer>();
-    buffer->dataBuffer = d3dbuffer;
+    buffer->dataBuffer          = d3dbuffer;
+    buffer->dataBufferStride    = stride;
 
     if (isIndirect)   buffer->createIndirect(stride);
     if (isStructured) buffer->createView(size / stride);
@@ -2070,11 +2075,11 @@ void setPrimitiveTopology(DrawQueueHandle handle, PrimitiveTopology topology)
     }
 }
 
-void setVertexBuffer(DrawQueueHandle handle, BufferHandle vb)
+void setVertexBuffer(DrawQueueHandle handle, BufferHandle vb, uint32_t idx)
 {
     if (handle != DrawQueueHandle::invalidHandle()) {
         DrawQueue* queue = static_cast<DrawQueue*>(handle.value);
-        queue->setVertexBuffer(vb);
+        queue->setVertexBuffer(idx, vb);
     }
 }
 
@@ -2126,19 +2131,19 @@ void drawIndexed(DrawQueueHandle handle, uint32_t count, uint32_t startIndex, ui
     }
 }
 
-void drawInstanced(DrawQueueHandle handle, uint32_t instanceCount, uint32_t count, uint32_t startVertex)
+void drawInstanced(DrawQueueHandle handle, uint32_t instanceCount, uint32_t count, uint32_t startVertex, uint32_t startInstance)
 {
     if (handle != DrawQueueHandle::invalidHandle()) {
         DrawQueue* queue = static_cast<DrawQueue*>(handle.value);
-        queue->drawInstanced(instanceCount, count, startVertex);
+        queue->drawInstanced(instanceCount, count, startVertex, startInstance);
     }
 }
 
-void drawIndexedInstanced(DrawQueueHandle handle, uint32_t instanceCount, uint32_t count, uint32_t startIndex, uint32_t startVertex)
+void drawIndexedInstanced(DrawQueueHandle handle, uint32_t instanceCount, uint32_t count, uint32_t startIndex, uint32_t startVertex, uint32_t startInstance)
 {
     if (handle != DrawQueueHandle::invalidHandle()) {
         DrawQueue* queue = static_cast<DrawQueue*>(handle.value);
-        queue->drawIndexedInstanced(instanceCount, count, startIndex, startVertex);
+        queue->drawIndexedInstanced(instanceCount, count, startIndex, startVertex, startInstance);
     }
 }
 

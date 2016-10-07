@@ -548,7 +548,7 @@ static void GL_processDrawQueue(DrawQueue* queue)
     for (const DrawCall& call: queue->getDrawCalls()) {
 
         // vertex and index buffers
-        GLBufferImpl* vertexBuffer = static_cast<GLBufferImpl*>(call.vertexBuffer.value);
+        GLBufferImpl* vertexBuffer = static_cast<GLBufferImpl*>(call.vertexBuffers[0].value);
         GLBufferImpl* indexBuffer  = static_cast<GLBufferImpl*>(call.indexBuffer.value);
 
         GLuint vbuffer = 0;
@@ -1032,11 +1032,11 @@ void setPrimitiveTopology(DrawQueueHandle handle, PrimitiveTopology topology)
     }
 }
 
-void setVertexBuffer(DrawQueueHandle handle, BufferHandle vb)
+void setVertexBuffer(DrawQueueHandle handle, BufferHandle vb, uint32_t idx)
 {
     if (handle != DrawQueueHandle::invalidHandle()) {
         DrawQueue* queue = static_cast<DrawQueue*>(handle.value);
-        queue->setVertexBuffer(vb);
+        queue->setVertexBuffer(idx, vb);
     }
 }
 
@@ -1088,19 +1088,19 @@ void drawIndexed(DrawQueueHandle handle, uint32_t count, uint32_t startIndex, ui
     }
 }
 
-void drawInstanced(DrawQueueHandle handle, uint32_t instanceCount, uint32_t count, uint32_t startVertex)
+void drawInstanced(DrawQueueHandle handle, uint32_t instanceCount, uint32_t count, uint32_t startVertex, uint32_t startInstance)
 {
     if (handle != DrawQueueHandle::invalidHandle()) {
         DrawQueue* queue = static_cast<DrawQueue*>(handle.value);
-        queue->drawInstanced(instanceCount, count, startVertex);
+        queue->drawInstanced(instanceCount, count, startVertex, startInstance);
     }
 }
 
-void drawIndexedInstanced(DrawQueueHandle handle, uint32_t instanceCount, uint32_t count, uint32_t startIndex, uint32_t startVertex)
+void drawIndexedInstanced(DrawQueueHandle handle, uint32_t instanceCount, uint32_t count, uint32_t startIndex, uint32_t startVertex, uint32_t startInstance)
 {
     if (handle != DrawQueueHandle::invalidHandle()) {
         DrawQueue* queue = static_cast<DrawQueue*>(handle.value);
-        queue->drawIndexedInstanced(instanceCount, count, startIndex, startVertex);
+        queue->drawIndexedInstanced(instanceCount, count, startIndex, startVertex, startInstance);
     }
 }
 

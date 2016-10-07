@@ -460,7 +460,7 @@ struct DVPGrassManager final
             sgfx::setResource(occlusionQueue, 0, physicalVertexBuffer.physicalBuffer);
             sgfx::setResource(occlusionQueue, 1, physicalIndexBuffer.physicalBuffer);
             sgfx::setResource(occlusionQueue, 2, initialInstanceBuffer);
-            sgfx::drawInstanced(occlusionQueue, numInstances, maxDrawCallCount, 0);
+            sgfx::drawInstanced(occlusionQueue, numInstances, maxDrawCallCount, 0, 0);
 
             // queue submit is done later
             //sgfx::submit(occlusionQueue);
