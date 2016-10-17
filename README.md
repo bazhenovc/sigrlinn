@@ -6,6 +6,17 @@ Sigrlinn is an abstract cross platform graphical API, that tries to make you for
 ### What does the name mean?
 Sigrlinn is the name of a pretty Scandinavian princess, daugther of the king Sváfnir of Sváfaland, from the [Helgakviða Hjörvarðssonar](http://en.wikipedia.org/wiki/Helgakvi%C3%B0a_Hj%C3%B6rvar%C3%B0ssonar) poem.
 
+### What can it do?
+
+Here are several interesting screenshots in a clockwise order:
+* [Dynamic Vertex Pulling](http://www.gamedev.net/page/resources/_/technical/graphics-programming-and-theory/dynamic-vertex-pulling-with-d3d11-r4048) combined with [GPU Driven Occlusion Culling](https://docs.google.com/presentation/d/1ArQwBnRmIaC-FxpuDbDlHHkRN4zql8c5QgIdbf7B-Ow). Warning: sample code is far from being optimal.
+* GPU-driven particle system where individual particles can collide with the scene and stay on top of it persistently.
+* Order independent transparency with per-pixel linked lists.
+* Lionheads [Mega Meshes](http://miciwan.com/GDC2011/GDC2011_Mega_Meshes.pdf) implementation (continuous multi resolution surface). This does not include: a DCC plugin or any mesh sculpting code; streaming; texturing.
+
+<img src=https://raw.githubusercontent.com/bazhenovc/sigrlinn/master/data/screenshots/DVP_OC.PNG width="50%" height="50%" /><img src=https://raw.githubusercontent.com/bazhenovc/sigrlinn/master/data/screenshots/GPU_Particles.PNG width="50%" height="50%" />
+<img src=https://raw.githubusercontent.com/bazhenovc/sigrlinn/master/data/screenshots/CMRS.PNG width="50%" height="50%" /><img src=https://raw.githubusercontent.com/bazhenovc/sigrlinn/master/data/screenshots/OIT.PNG width="50%" height="50%" />
+
 ### Motivation
 There are 2 major cross-platform problems: the APIs and the shaders.
 In the nearest future we will have to support 5 (!) graphics APIs: DX11, DX12, OpenGL (ES?), Metal and Vulkan, and 4 (!) shader languages: HLSL, GLSL, Metal and Vulkan shaders (GLSL? I hope so).
@@ -45,8 +56,8 @@ D3D11                | Full support (starting from feature level 10.0)
 OpenGL 4.0           | Partial support (WIP)
 Apple METAL          | WIP
 D3D12                | WIP
-AMD Mantle           | NDA closed source (will be shipped as Vulkan)
-Khronos Vulkan       | See above (Mantle)
+AMD Mantle           | Abandoned in favor of Vulkan
+Khronos Vulkan       | WIP
 PlayStation 4 libGNM | Possible, but not planned for the nearest future
 OpenGL ES 3.0        | Possible, but not planned for the nearest future
 
