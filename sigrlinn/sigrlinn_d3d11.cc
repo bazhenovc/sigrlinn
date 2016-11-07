@@ -1067,7 +1067,7 @@ VertexFormatHandle createVertexFormat(
         inputData[i].InputSlot            = elements[i].slot;
         inputData[i].AlignedByteOffset    = static_cast<UINT>(elements[i].offset);
         inputData[i].InputSlotClass       = elements[i].perInstanceData ? D3D11_INPUT_PER_INSTANCE_DATA : D3D11_INPUT_PER_VERTEX_DATA;
-        inputData[i].InstanceDataStepRate = 0;
+        inputData[i].InstanceDataStepRate = elements[i].perInstanceData ? 1 : 0;
     }
 
     // validate first
@@ -1340,7 +1340,7 @@ void copyBufferData(BufferHandle handle, size_t offset, size_t size, const void*
         g_pImmediateContext->UpdateSubresource(
             buffer->dataBuffer,
             0,
-            &box, 
+            &box,
             mem,
             0, 0
         );
