@@ -41,6 +41,7 @@ set(SGFX_GLEW_SRC
 
 include_directories(${CMAKE_SOURCE_DIR}/sigrlinn)
 include_directories(${CMAKE_SOURCE_DIR}/external/glm/)
+include_directories(${CMAKE_SOURCE_DIR}/external/)
 
 if(D3D12_FOUND)
     message("D3D12 found")
@@ -69,4 +70,5 @@ AddDemo(PBR         demo/demo_pbr.cc)
 AddDemo(Particles   demo/demo_particles.cc)
 AddDemo(OIT         demo/demo_oit.cc)
 AddDemo(CMRS        demo/demo_cmrs.cc)
+AddDemo(FFD         demo/demo_ffd.cc)
 #AddDemo(Terrain     demo/demo_terrain.cc)

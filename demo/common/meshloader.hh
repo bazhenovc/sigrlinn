@@ -27,6 +27,8 @@
 #include <vector>
 #include <string>
 
+#include <glm/glm.hpp>
+
 class MeshData
 {
 public:
@@ -49,13 +51,13 @@ public:
     {
         enum { MaxBones = 4 };
 
-        float position[3];
-        float uv0[2];
-        float uv1[2];
-        float normal[3];
-        uint8_t boneIDs[MaxBones];
-        float   boneWeights[MaxBones];
-        uint8_t color[4];
+        glm::vec3 position;
+        glm::vec2 uv0;
+        glm::vec2 uv1;
+        glm::vec3 normal;
+        uint8_t   boneIDs[MaxBones];
+        float     boneWeights[MaxBones];
+        uint8_t   color[4];
 
         Vertex()
         {
