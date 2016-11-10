@@ -96,12 +96,8 @@ public:
                 for (int k = 0; k < kQuantity; ++k) {
                     controlPoint.z = vmin.z + D.z * k;
 
-                    glm::vec3 randomPoint = glm::vec3(
-                        float(rand() % 10) - 5.0F,
-                        float(rand() % 10) - 5.0F,
-                        float(rand() % 10) - 5.0F
-                    ) * 0.1F;
-                    glm::vec3 newControlPoint = spline->GetControlPoint(i, j, k) + randomPoint;
+                    glm::vec4 oldControlPoint = glm::vec4(spline->GetControlPoint(i, j, k), 1.0F);
+                    glm::vec3 newControlPoint = glm::rotateX(oldControlPoint, float(j));
 
                     spline->SetControlPoint(i, j, k, newControlPoint);
                 }
@@ -179,18 +175,64 @@ public:
 
         // load mesh and generate spline
         {
-            meshData.read("data/meshes/dragon/dragon1.mesh");
+            //meshData.read("data/meshes/dragon/dragon1.mesh");
+            meshData.read("data/meshes/connector020.mesh");
 
             // create bspline volume
             spline = std::make_unique<WM::BSplineVolume<float>>(kQuantity, kQuantity, kQuantity,
                 kDegree, kDegree, kDegree);
 
-            std::vector<MeshData::Vertex>& vertices = meshData.getVertices();
+            std::vector<MeshData::Index>&   indices     = meshData.getIndices();
+            std::vector<MeshData::Vertex>&  vertices    = meshData.getVertices();
 
             for (size_t i = 0; i < vertices.size(); ++i) {
 
                 vmin = glm::min(vmin, vertices[i].position);
                 vmax = glm::max(vmax, vertices[i].position);
+            }
+
+            // tile mesh
+            {
+                std::vector<MeshData::Vertex>   newVertices = vertices;
+                std::vector<MeshData::Index>    newIndices  = indices;
+
+                for (auto& vertex: newVertices) {
+                    vertex.position.y -= vmax.y;
+                }
+
+                for (auto& index: newIndices) {
+                    index += MeshData::Index(vertices.size());
+                }
+
+                vertices.resize(vertices.size() * 2);
+                indices.resize(indices.size() * 2);
+
+                std::memcpy(vertices.data() + newVertices.size(), newVertices.data(), newVertices.size() * sizeof(MeshData::Vertex));
+                std::memcpy(indices.data() + newIndices.size(), newIndices.data(), newIndices.size() * sizeof(MeshData::Index));
+
+                vmin.y -= vmax.y;
+            }
+
+            // tile mesh again
+            {
+                std::vector<MeshData::Vertex>   newVertices = vertices;
+                std::vector<MeshData::Index>    newIndices  = indices;
+
+                for (auto& vertex: newVertices) {
+                    vertex.position.x -= vmax.x;
+                }
+
+                for (auto& index: newIndices) {
+                    index += MeshData::Index(vertices.size());
+                }
+
+                vertices.resize(vertices.size() * 2);
+                indices.resize(indices.size() * 2);
+
+                std::memcpy(vertices.data() + newVertices.size(), newVertices.data(), newVertices.size() * sizeof(MeshData::Vertex));
+                std::memcpy(indices.data() + newIndices.size(), newIndices.data(), newIndices.size() * sizeof(MeshData::Index));
+
+                vmin.x -= vmax.x;
             }
 
             // generate control points
@@ -310,6 +352,8 @@ public:
         if (GetAsyncKeyState(VK_SPACE)) {
             randomizeSpline();
             updateModel();
+
+            Sleep(500);
         }
 
         // Update our time
