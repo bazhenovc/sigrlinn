@@ -220,6 +220,7 @@ public:
 
                 for (auto& vertex: newVertices) {
                     vertex.position.x -= vmax.x;
+                    vertex.position.z -= vmax.z * 2.0F;
                 }
 
                 for (auto& index: newIndices) {
@@ -233,6 +234,7 @@ public:
                 std::memcpy(indices.data() + newIndices.size(), newIndices.data(), newIndices.size() * sizeof(MeshData::Index));
 
                 vmin.x -= vmax.x;
+                vmin.z -= vmax.z * 2.0F;
             }
 
             // generate control points
