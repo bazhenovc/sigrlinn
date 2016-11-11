@@ -88,7 +88,6 @@ public:
         glm::vec3 D     = range / float(kQuantity - 1);
 
         glm::vec3 controlPoint;
-        srand(unsigned int(time(nullptr)));
         for (int i = 0; i < kQuantity; ++i) {
             controlPoint.x = vmin.x + D.x * i;
             for (int j = 0; j < kQuantity; ++j) {
