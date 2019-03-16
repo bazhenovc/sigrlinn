@@ -1,3 +1,11 @@
+# PROJECT DISCONTINUED
+
+Unfortunately I'm no longer maintaining this project - I've left the company that was sponsoring it, and since then they've been developing this library internally. It diverged a lot from what's currently hosted here and nobody has the time to merge these changes back.
+
+I recommend everyone to use https://github.com/bkaradzic/bgfx instead - it's stable, reliable and has excellent documentation.
+
+I thank everyone who was involved in developing this little library.
+
 # Sigrlinn - An abstract graphics API library
 
 ### Intro
